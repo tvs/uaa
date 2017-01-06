@@ -33,6 +33,10 @@
 
     <bean id="tokenEndpointPostProcessor" class="org.cloudfoundry.identity.uaa.security.web.TokenEndpointPostProcessor"/>
 
+    <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
+        <constructor-arg name="hostName" value="localhost"/>
+    </bean>
+
     <oauth:authorization-server
         client-details-service-ref="jdbcClientDetailsService"
         token-services-ref="tokenServices" user-approval-handler-ref="userManagedApprovalHandler"
@@ -545,10 +549,13 @@
         <value>cloud_controller_service_permissions.read</value>
     </util:set>
 
-    <bean id="userDatabase" class="org.cloudfoundry.identity.uaa.user.JdbcUaaUserDatabase">
+    <bean id="userDatabase" class= "org.cloudfoundry.identity.uaa.user.VmidentityUserDatabase">
+            <!-- class="org.cloudfoundry.identity.uaa.user.JdbcUaaUserDatabase">
         <constructor-arg ref="jdbcTemplate" />
         <property name="defaultAuthorities" ref="defaultUserAuthorities" />
-        <property name="caseInsensitive" ref="useCaseInsensitiveQueries"/>
+        <property name="caseInsensitive" ref="useCaseInsensitiveQueries"/>-->
+        <constructor-arg ref="idmClient" />
+        <constructor-arg ref="defaultUserAuthorities" />
     </bean>
 
     <bean id="lockoutPolicy" class="org.cloudfoundry.identity.uaa.provider.LockoutPolicy">
@@ -585,13 +592,15 @@
         <constructor-arg type="AuditEventType" value="UserAuthenticationFailure"/>
     </bean>
 
-    <bean id="uaaUserDatabaseAuthenticationManager"
-          class="org.cloudfoundry.identity.uaa.authentication.manager.AuthzAuthenticationManager">
+    <bean id="uaaUserDatabaseAuthenticationManager" class="org.cloudfoundry.identity.uaa.authentication.manager.VmidentityAuthenticationManager">
+        <!-- class="org.cloudfoundry.identity.uaa.authentication.manager.AuthzAuthenticationManager">
         <constructor-arg ref="userDatabase"/>
         <constructor-arg ref="identityProviderProvisioning"/>
         <property name="accountLoginPolicy" ref="globalPeriodLockoutPolicy"/>
         <property name="origin" value="uaa"/>
-        <property name="allowUnverifiedUsers" value="${allowUnverifiedUsers:true}"/>
+        <property name="allowUnverifiedUsers" value="${allowUnverifiedUsers:true}"/> -->
+        <constructor-arg ref="idmClient" />
+        <constructor-arg ref="defaultUserAuthorities" />
     </bean>
 
     <bean id="uaaAuthenticationMgr" class="org.cloudfoundry.identity.uaa.authentication.manager.CheckIdpEnabledAuthenticationManager">

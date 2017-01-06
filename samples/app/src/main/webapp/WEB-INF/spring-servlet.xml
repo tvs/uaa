@@ -118,7 +118,26 @@
         <property name="clientId" value="${CLIENT_ID:app}" />
     </bean>
 
-    <oauth:rest-template id="restTemplate" resource="uaa" />
+    <bean id="authorizationCodeProvider" class="org.cloudfoundry.identity.app.web.AuthzCodeTokenProvider" />
+
+    <bean id="implicitProvider" class="org.springframework.security.oauth2.client.token.grant.implicit.ImplicitAccessTokenProvider" />
+
+    <bean id="resourceOwnerProvider" class="org.springframework.security.oauth2.client.token.grant.password.ResourceOwnerPasswordAccessTokenProvider"/>
+
+    <bean id="clientCredentialsProvider" class="org.springframework.security.oauth2.client.token.grant.client.ClientCredentialsAccessTokenProvider" />
+
+    <bean id="chainedProvider" class="org.springframework.security.oauth2.client.token.AccessTokenProviderChain">
+        <constructor-arg>
+        <list>
+            <ref bean="authorizationCodeProvider" />
+            <ref bean="implicitProvider" />
+            <ref bean="resourceOwnerProvider" />
+            <ref bean="clientCredentialsProvider" />
+            </list>
+        </constructor-arg>
+    </bean>
+
+    <oauth:rest-template id="restTemplate" resource="uaa" access-token-provider="chainedProvider"/>
 
     <!--define an oauth 2 resource for api access -->
     <oauth:resource id="uaa" type="authorization_code" client-id="${CLIENT_ID:app}" client-secret="${CLIENT_SECRET:appclientsecret}"

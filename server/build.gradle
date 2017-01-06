@@ -6,6 +6,8 @@ dependencies {
 
   compile(identityModel)
 
+  compile fileTree(dir: 'libs', include: '*.jar')
+
   provided group: 'javax.servlet', name: 'javax.servlet-api', version: parent.servletVersion
   compile group: 'javax.mail', name: 'mail', version: parent.javamailVersion
 

@@ -29,6 +29,7 @@ dependencies {
   compile(identityServer){
     exclude(module: 'jna')
   }
+
   compile group: 'cglib', name: 'cglib', version:parent.cglibVersion
   runtime group: 'org.springframework.security', name: 'spring-security-config', version:parent.springSecurityVersion
   runtime group: 'org.springframework.security', name: 'spring-security-jwt', version:parent.springSecurityJwtVersion
