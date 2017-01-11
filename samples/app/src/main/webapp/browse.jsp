@@ -67,7 +67,7 @@
 	</div>
 <ul>
 <li><a href="apps">Apps</a></li>
-<li><a href="j_spring_security_logout">Logout</a></li>
+<li><a href="${cloudFoundryLogoutUrl}">Logout</a></li>
 <li><a href="<c:url value="/"/>">Home</a></li>
 </ul>
 </body>
