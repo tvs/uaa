@@ -50,8 +50,6 @@ zones:
   internal:
     hostnames:
       - localhost
-      - <fqdn>
-      - <hostname>
 #      - host1.domain.com
 #      - host2
 #      - testzone3.localhost
