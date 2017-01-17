@@ -20,11 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.bouncycastle.openssl.PEMWriter;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
-import org.cloudfoundry.identity.uaa.provider.VmidentityIdentityProviderProvisioning;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
 import com.google.common.primitives.Ints;
@@ -33,8 +30,6 @@ import com.vmware.identity.idm.Tenant;
 import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvisioning {
-
-    private final Log logger = LogFactory.getLog(VmidentityIdentityProviderProvisioning.class);
 
     private final CasIdmClient _idmClient;
     private final ConcurrentHashMap<String, IdentityZoneConfiguration> _configs;
