@@ -22,6 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.bouncycastle.openssl.PEMWriter;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
+import org.cloudfoundry.identity.uaa.oauth.KeyInfo;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
 import com.google.common.primitives.Ints;
@@ -113,9 +114,10 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
         Map<String, String> keys = new HashMap<String, String>();
         PrivateKey privateKey = _idmClient.getTenantPrivateKey(tenantName);
         StringWriter writer = new StringWriter();
-        PEMWriter pemWriter = new PEMWriter(writer);
-        pemWriter.writeObject(privateKey);
-        pemWriter.close();
+        
+        try (PEMWriter pemWriter = new PEMWriter(writer)) {
+            pemWriter.writeObject(privateKey);
+        }
         
         keys.put("key-id-1", writer.toString());
         config.getTokenPolicy().setKeys(keys);
@@ -124,6 +126,16 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
                 Ints.saturatedCast(_idmClient.getMaximumBearerTokenLifetime(tenantName)));
         config.getTokenPolicy().setRefreshTokenValidity(
                 Ints.saturatedCast(_idmClient.getMaximumBearerRefreshTokenLifetime(tenantName)));
+        
+        config.getSamlConfig().setPrivateKey(writer.toString());
+        
+        // IDM doesn't store a private key password - we should be able to get away without it, though
+        // config.getSamlConfig().setPrivateKeyPassword(privateKeyPassword);
+        
+        KeyInfo keyInfo = new KeyInfo();
+        keyInfo.setKeyId("key-id-1");
+        keyInfo.setSigningKey(writer.toString());
+        config.getSamlConfig().setCertificate(keyInfo.getVerifierKey());
         
         zone.setConfig(config);
     }
@@ -148,7 +160,7 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
         IdentityZone zone = null;
         String systemTenant = this._idmClient.getSystemTenant();
         
-        if (tenantName.equals(systemTenant)) {
+        if (tenantName.equalsIgnoreCase(systemTenant)) {
             zone = IdentityZone.getUaa();
         } else {
             zone = identityZoneForTenant(tenantName);
