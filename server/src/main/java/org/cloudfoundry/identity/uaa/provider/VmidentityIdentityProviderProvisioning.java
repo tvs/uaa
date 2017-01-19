@@ -18,6 +18,8 @@ import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
@@ -27,6 +29,8 @@ import com.vmware.identity.idm.IIdentityStoreDataEx;
 import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityIdentityProviderProvisioning implements IdentityProviderProvisioning {
+
+    private final Log logger = LogFactory.getLog(VmidentityIdentityProviderProvisioning.class);
 
     private final CasIdmClient _idmClient;
 

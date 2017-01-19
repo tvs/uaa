@@ -12,19 +12,6 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.provider.saml.idp;
 
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.LinkedHashSet;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.TreeMap;
-
-import javax.xml.namespace.QName;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
 import org.opensaml.Configuration;
 import org.opensaml.common.SAMLObjectBuilder;
 import org.opensaml.common.SAMLRuntimeException;
@@ -61,6 +48,16 @@ import org.springframework.security.saml.key.KeyManager;
 import org.springframework.security.saml.metadata.ExtendedMetadata;
 import org.springframework.security.saml.util.SAMLUtil;
 
+import javax.xml.namespace.QName;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.LinkedList;
+import java.util.Map;
+import java.util.TreeMap;
+
 /**
  * The class is responsible for generating the metadata that describes the identity provider in the current deployment
  * environment. All the URLs in the metadata derive from information provided by the ServletContext.
@@ -68,8 +65,6 @@ import org.springframework.security.saml.util.SAMLUtil;
  * This code for this class is based on org.springframework.security.saml.metadata.MetadataGenerator.
  */
 public class IdpMetadataGenerator {
-
-    private final Log logger = LogFactory.getLog(getClass());
 
     private String id;
     private String entityId;
@@ -245,7 +240,6 @@ public class IdpMetadataGenerator {
         }
 
         String entityBaseURL = getEntityBaseURL();
-        logger.debug("ExtendedMetadata: EntityBaseURL: " + entityBaseURL);
         String entityAlias = getEntityAlias();
 
         if (isIncludeDiscovery()) {
@@ -495,7 +489,6 @@ public class IdpMetadataGenerator {
         SAMLObjectBuilder<SingleLogoutService> builder = (SAMLObjectBuilder<SingleLogoutService>) builderFactory
                 .getBuilder(SingleLogoutService.DEFAULT_ELEMENT_NAME);
         SingleLogoutService logoutService = builder.buildObject();
-        log.debug("Server URL: " + getServerURL(entityBaseURL, entityAlias, getSAMLLogoutFilterPath()));
         logoutService.setLocation(getServerURL(entityBaseURL, entityAlias, getSAMLLogoutFilterPath()));
         logoutService.setBinding(binding);
         return logoutService;
