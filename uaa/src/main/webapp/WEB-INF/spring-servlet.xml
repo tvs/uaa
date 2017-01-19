@@ -243,6 +243,8 @@
            <set>
                 <value>#{T(org.cloudfoundry.identity.uaa.util.UaaUrlUtils).getHostForURI(@uaaUrl)}</value>
                 <value>#{T(org.cloudfoundry.identity.uaa.util.UaaUrlUtils).getHostForURI(@loginUrl)}</value>
+                <value>#{T(org.cloudfoundry.identity.uaa.util.UaaUrlUtils).getHostForURI(@uaaIp)}</value>
+                <value>#{T(org.cloudfoundry.identity.uaa.util.UaaUrlUtils).getHostForURI(@loginIp)}</value>
                 <value>localhost</value>
            </set>
         </property>
@@ -259,13 +261,30 @@
 
     <bean id="identityZoneSwitchingFilter" class="org.cloudfoundry.identity.uaa.zone.IdentityZoneSwitchingFilter"/>
 
-    <bean id="uaaUrl" class="java.lang.String">
-        <constructor-arg value="${uaa.url:http://localhost:8080/uaa}"/>
+    <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
+        <constructor-arg name="hostName" value="localhost"/>
     </bean>
 
-    <bean id="loginUrl" class="java.lang.String">
-        <constructor-arg value="${login.url:http://localhost:8080/uaa}"/>
+    <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
+        <constructor-arg name="idmClient" ref="idmClient"/>
     </bean>
+
+    <bean id="uaaUrl" class="java.lang.String">
+        <constructor-arg value="#{uaaUrlRetriever.getEntityBaseFQDN()}"/>
+    </bean>
+
+    <bean id="uaaIp" class="java.lang.String">
+        <constructor-arg value="#{uaaUrlRetriever.getEntityBaseIP()}"/>
+      </bean>
+
+    <bean id="loginUrl" class="java.lang.String">
+        <constructor-arg value="#{uaaUrlRetriever.getEntityBaseFQDN()}"/>
+    </bean>
+
+    <bean id="loginIp" class="java.lang.String">
+        <constructor-arg value="#{uaaUrlRetriever.getEntityBaseIP()}"/>
+    </bean>
+
 
     <bean id="scimUserQueryConverter" class="org.cloudfoundry.identity.uaa.scim.jdbc.ScimSearchQueryConverter">
         <property name="attributeNameMapper">

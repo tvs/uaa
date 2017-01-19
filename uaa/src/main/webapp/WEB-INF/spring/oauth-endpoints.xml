@@ -37,6 +37,10 @@
         <constructor-arg name="hostName" value="localhost"/>
     </bean>
 
+    <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
+        <constructor-arg name="idmClient" ref="idmClient"/>
+    </bean>
+
     <oauth:authorization-server
         client-details-service-ref="jdbcClientDetailsService"
         token-services-ref="tokenServices" user-approval-handler-ref="userManagedApprovalHandler"
@@ -501,7 +505,7 @@
         <property name="clientDetailsService" ref="jdbcClientDetailsService" />
         <property name="userDatabase" ref="userDatabase" />
         <property name="defaultUserAuthorities" ref="defaultUserAuthorities" />
-        <property name="issuer" value="${issuer.uri:http://localhost:8080/uaa}" />
+        <property name="issuer" value="#{uaaUrlRetriever.getEntityBaseFQDN()}" />
         <property name="approvalStore" ref="approvalStore" />
         <property name="tokenPolicy" ref="globalTokenPolicy" />
         <property name="excludedClaims" ref="excludedClaims"/>

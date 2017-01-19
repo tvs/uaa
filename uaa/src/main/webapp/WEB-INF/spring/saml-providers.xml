@@ -41,6 +41,14 @@
             </security:filter-chain-map>
         </bean>
 
+        <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
+            <constructor-arg name="hostName" value="localhost"/>
+        </bean>
+
+        <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
+            <constructor-arg name="idmClient" ref="idmClient"/>
+        </bean>
+
         <!-- Logger for SAML messages and events -->
         <bean id="samlLogger" class="org.springframework.security.saml.log.SAMLDefaultLogger" />
 
@@ -87,7 +95,7 @@
             <property name="extendedMetadata" ref="extendedMetaData"/>
             <property name="requestSigned" value="${login.saml.signRequest:true}" />
             <property name="wantAssertionSigned" value="${login.saml.wantAssertionSigned:true}" />
-            <property name="entityBaseURL" value="${login.entityBaseURL:http://localhost:8080/uaa}" />
+            <property name="entityBaseURL" value="#{uaaUrlRetriever.getEntityBaseFQDN()}" />
             <property name="entityId" ref="samlEntityID" />
         </bean>
 
