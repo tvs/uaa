@@ -14,6 +14,7 @@ package org.cloudfoundry.identity.uaa.zone;
 
 import java.io.StringWriter;
 import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -22,7 +23,6 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.bouncycastle.openssl.PEMWriter;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
-import org.cloudfoundry.identity.uaa.oauth.KeyInfo;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
 import com.google.common.primitives.Ints;
@@ -84,90 +84,100 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
             for (String tenant : this._idmClient.getAllTenants()) {
                 list.add(getIdentityZoneFromTenant(tenant));
             }
-            
+
             return list;
         } catch (Exception ex) {
             throw new IllegalStateException("Failed to retrieve zones.", ex);
         }
     }
-    
+
     private IdentityZone identityZoneForTenant(String tenantName) throws Exception {
         IdentityZone zone = new IdentityZone();
         Tenant t = this._idmClient.getTenant(tenantName);
-        
+
         zone.setId(t.getName());
         zone.setName(t.getName());
         zone.setSubdomain(t.getName());
         zone.setDescription(t._longName);
         zone.setVersion(1);
-        
+
         return zone;
     }
-    
+
     private void configureIdentityZone(String tenantName, IdentityZone zone) throws Exception {
         IdentityZoneConfiguration config = this._configs.get(tenantName);
         if (config == null) {
             config = new IdentityZoneConfiguration();
             this._configs.put(tenantName, config);
         }
-        
+
         Map<String, String> keys = new HashMap<String, String>();
         PrivateKey privateKey = _idmClient.getTenantPrivateKey(tenantName);
-        StringWriter writer = new StringWriter();
-        
-        try (PEMWriter pemWriter = new PEMWriter(writer)) {
+
+        if (privateKey == null) {
+            throw new IllegalStateException("Failed to retrieve private key for tenant: " + tenantName);
+        }
+
+        List<Certificate> certificates = _idmClient.getTenantCertificate(tenantName);
+        if (certificates == null || certificates.isEmpty()) {
+            throw new IllegalStateException("Failed to retrieve certificates for tenant: " + tenantName);
+        }
+
+        StringWriter privateKeyWriter = new StringWriter();
+        StringWriter certificateWriter = new StringWriter();
+
+        try (PEMWriter pemWriter = new PEMWriter(privateKeyWriter, "rsa")) {
             pemWriter.writeObject(privateKey);
         }
-        
-        keys.put("key-id-1", writer.toString());
+
+        try (PEMWriter pemWriter = new PEMWriter(certificateWriter, "rsa")) {
+            pemWriter.writeObject(certificates.get(0));
+        }
+
+        keys.put("key-id-1", privateKeyWriter.toString());
         config.getTokenPolicy().setKeys(keys);
         config.getTokenPolicy().setActiveKeyId("key-id-1");
         config.getTokenPolicy().setAccessTokenValidity(
                 Ints.saturatedCast(_idmClient.getMaximumBearerTokenLifetime(tenantName)));
         config.getTokenPolicy().setRefreshTokenValidity(
                 Ints.saturatedCast(_idmClient.getMaximumBearerRefreshTokenLifetime(tenantName)));
-        
-        config.getSamlConfig().setPrivateKey(writer.toString());
-        
+
+        config.getSamlConfig().setPrivateKey(privateKeyWriter.toString());
         // IDM doesn't store a private key password - we should be able to get away without it, though
         // config.getSamlConfig().setPrivateKeyPassword(privateKeyPassword);
-        
-        KeyInfo keyInfo = new KeyInfo();
-        keyInfo.setKeyId("key-id-1");
-        keyInfo.setSigningKey(writer.toString());
-        config.getSamlConfig().setCertificate(keyInfo.getVerifierKey());
-        
+        config.getSamlConfig().setCertificate(certificateWriter.toString());
+
         zone.setConfig(config);
     }
 
     private IdentityZone getIdentityZoneFromId(String id) throws Exception {
         String tenantName = id;
         IdentityZone zone = null;
-        
+
         if (id.equalsIgnoreCase(IdentityZone.getUaa().getId())) {
             tenantName = this._idmClient.getSystemTenant();
             zone = IdentityZone.getUaa();
         } else {
             zone = identityZoneForTenant(tenantName);
         }
-        
+
         configureIdentityZone(tenantName, zone);
-        
+
         return zone;
     }
-    
+
     private IdentityZone getIdentityZoneFromTenant(String tenantName) throws Exception {
         IdentityZone zone = null;
         String systemTenant = this._idmClient.getSystemTenant();
-        
+
         if (tenantName.equalsIgnoreCase(systemTenant)) {
             zone = IdentityZone.getUaa();
         } else {
             zone = identityZoneForTenant(tenantName);
         }
-        
+
         configureIdentityZone(tenantName, zone);
-        
+
         return zone;
     }
 
