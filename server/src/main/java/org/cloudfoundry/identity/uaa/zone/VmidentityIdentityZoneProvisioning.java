@@ -12,22 +12,25 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.zone;
 
+import java.io.StringWriter;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import org.bouncycastle.openssl.PEMWriter;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
-import org.cloudfoundry.identity.uaa.provider.VmidentityIdentityProviderProvisioning;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
+import com.google.common.primitives.Ints;
+import com.vmware.identity.idm.NoSuchTenantException;
 import com.vmware.identity.idm.Tenant;
 import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvisioning {
-
-    private final Log logger = LogFactory.getLog(VmidentityIdentityProviderProvisioning.class);
 
     private final CasIdmClient _idmClient;
     private final ConcurrentHashMap<String, IdentityZoneConfiguration> _configs;
@@ -58,11 +61,9 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
     @Override
     public IdentityZone retrieve(String id) {
         try {
-            String systemTenant = this._idmClient.getSystemTenant();
-            String tenant = VmidentityUtils.getTenantName(id, this._idmClient.getSystemTenant());
-            Tenant t = this._idmClient.getTenant(tenant);
-
-            return identityZoneForTenant(t, systemTenant.equalsIgnoreCase(tenant));
+            return getIdentityZoneFromId(id);
+        } catch (NoSuchTenantException ex) {
+            throw new ZoneDoesNotExistsException("Zone["+id+"] not found.", ex);
         } catch (Exception ex) {
             throw new IllegalStateException(String.format("Failed to retrieve provider Id '%s'.", id), ex);
         }
@@ -79,11 +80,9 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
     @Override
     public List<IdentityZone> retrieveAll() {
         try {
-            String systemTenant = this._idmClient.getSystemTenant();
             ArrayList<IdentityZone> list = new ArrayList<IdentityZone>();
             for (String tenant : this._idmClient.getAllTenants()) {
-                list.add(identityZoneForTenant(this._idmClient.getTenant(tenant),
-                        systemTenant.equalsIgnoreCase(tenant)));
+                list.add(getIdentityZoneFromTenant(tenant));
             }
 
             return list;
@@ -92,29 +91,94 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
         }
     }
 
-    private IdentityZone identityZoneForTenant(Tenant t, boolean systemTenant) {
-        IdentityZone identityZone = null;
-        if (systemTenant) {
-            identityZone = IdentityZone.getUaa();
-        } else {
-            identityZone = new IdentityZone();
+    private IdentityZone identityZoneForTenant(String tenantName) throws Exception {
+        IdentityZone zone = new IdentityZone();
+        Tenant t = this._idmClient.getTenant(tenantName);
 
-            identityZone.setId(t.getName());
-            identityZone.setVersion(1);
-            // identityZone.setCreated(rs.getTimestamp(3));
-            // identityZone.setLastModified(rs.getTimestamp(4));
-            identityZone.setName(t.getName());
-            identityZone.setSubdomain(t.getName());
-            identityZone.setDescription(t._longName);
-        }
+        zone.setId(t.getName());
+        zone.setName(t.getName());
+        zone.setSubdomain(t.getName());
+        zone.setDescription(t._longName);
+        zone.setVersion(1);
 
-        // todo: default for now, should implement
-        IdentityZoneConfiguration config = new IdentityZoneConfiguration();
-        if (this._configs.containsKey(t.getName())) {
-            config = this._configs.get(t.getName());
-        }
-        identityZone.setConfig(config);
-
-        return identityZone;
+        return zone;
     }
+
+    private void configureIdentityZone(String tenantName, IdentityZone zone) throws Exception {
+        IdentityZoneConfiguration config = this._configs.get(tenantName);
+        if (config == null) {
+            config = new IdentityZoneConfiguration();
+            this._configs.put(tenantName, config);
+        }
+
+        Map<String, String> keys = new HashMap<String, String>();
+        PrivateKey privateKey = _idmClient.getTenantPrivateKey(tenantName);
+
+        if (privateKey == null) {
+            throw new IllegalStateException("Failed to retrieve private key for tenant: " + tenantName);
+        }
+
+        List<Certificate> certificates = _idmClient.getTenantCertificate(tenantName);
+        if (certificates == null || certificates.isEmpty()) {
+            throw new IllegalStateException("Failed to retrieve certificates for tenant: " + tenantName);
+        }
+
+        StringWriter privateKeyWriter = new StringWriter();
+        StringWriter certificateWriter = new StringWriter();
+
+        try (PEMWriter pemWriter = new PEMWriter(privateKeyWriter, "rsa")) {
+            pemWriter.writeObject(privateKey);
+        }
+
+        try (PEMWriter pemWriter = new PEMWriter(certificateWriter, "rsa")) {
+            pemWriter.writeObject(certificates.get(0));
+        }
+
+        keys.put("key-id-1", privateKeyWriter.toString());
+        config.getTokenPolicy().setKeys(keys);
+        config.getTokenPolicy().setActiveKeyId("key-id-1");
+        config.getTokenPolicy().setAccessTokenValidity(
+                Ints.saturatedCast(_idmClient.getMaximumBearerTokenLifetime(tenantName)));
+        config.getTokenPolicy().setRefreshTokenValidity(
+                Ints.saturatedCast(_idmClient.getMaximumBearerRefreshTokenLifetime(tenantName)));
+
+        config.getSamlConfig().setPrivateKey(privateKeyWriter.toString());
+        // IDM doesn't store a private key password - we should be able to get away without it, though
+        // config.getSamlConfig().setPrivateKeyPassword(privateKeyPassword);
+        config.getSamlConfig().setCertificate(certificateWriter.toString());
+
+        zone.setConfig(config);
+    }
+
+    private IdentityZone getIdentityZoneFromId(String id) throws Exception {
+        String tenantName = id;
+        IdentityZone zone = null;
+
+        if (id.equalsIgnoreCase(IdentityZone.getUaa().getId())) {
+            tenantName = this._idmClient.getSystemTenant();
+            zone = IdentityZone.getUaa();
+        } else {
+            zone = identityZoneForTenant(tenantName);
+        }
+
+        configureIdentityZone(tenantName, zone);
+
+        return zone;
+    }
+
+    private IdentityZone getIdentityZoneFromTenant(String tenantName) throws Exception {
+        IdentityZone zone = null;
+        String systemTenant = this._idmClient.getSystemTenant();
+
+        if (tenantName.equalsIgnoreCase(systemTenant)) {
+            zone = IdentityZone.getUaa();
+        } else {
+            zone = identityZoneForTenant(tenantName);
+        }
+
+        configureIdentityZone(tenantName, zone);
+
+        return zone;
+    }
+
 }

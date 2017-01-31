@@ -97,7 +97,7 @@
         <property name="wantAuthnRequestSigned"
             value="${login.saml.wantAuthnRequestSigned:false}" />
         <property name="entityBaseURL"
-            value="${login.entityBaseURL:http://localhost:8080/uaa}" />
+            value="#{uaaUrlRetriever.getEntityBaseFQDN()}" />
         <property name="entityId" ref="samlIdpEntityID" />
         <property name="samlWebSSOFilter" ref="samlIdpWebSsoProcessingFilter" />
     </bean>
