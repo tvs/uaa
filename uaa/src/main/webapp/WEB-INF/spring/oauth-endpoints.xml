@@ -33,14 +33,6 @@
 
     <bean id="tokenEndpointPostProcessor" class="org.cloudfoundry.identity.uaa.security.web.TokenEndpointPostProcessor"/>
 
-    <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
-        <constructor-arg name="hostName" value="localhost"/>
-    </bean>
-
-    <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
-        <constructor-arg name="idmClient" ref="idmClient"/>
-    </bean>
-
     <oauth:authorization-server
         client-details-service-ref="jdbcClientDetailsService"
         token-services-ref="tokenServices" user-approval-handler-ref="userManagedApprovalHandler"

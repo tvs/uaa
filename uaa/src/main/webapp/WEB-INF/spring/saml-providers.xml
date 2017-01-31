@@ -41,14 +41,6 @@
             </security:filter-chain-map>
         </bean>
 
-        <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
-            <constructor-arg name="hostName" value="localhost"/>
-        </bean>
-
-        <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
-            <constructor-arg name="idmClient" ref="idmClient"/>
-        </bean>
-
         <!-- Logger for SAML messages and events -->
         <bean id="samlLogger" class="org.springframework.security.saml.log.SAMLDefaultLogger" />
 

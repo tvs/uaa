@@ -29,14 +29,6 @@
     <bean id="samlIdpAuthenticationProvider"
         class="org.cloudfoundry.identity.uaa.provider.saml.idp.IdpSamlAuthenticationProvider" />
 
-    <bean id="idmClient" class="com.vmware.identity.idm.client.CasIdmClient">
-        <constructor-arg name="hostName" value="localhost"/>
-    </bean>
-
-    <bean id="uaaUrlRetriever" class="org.cloudfoundry.identity.uaa.util.VmidentityUaaURLRetriever">
-        <constructor-arg name="idmClient" ref="idmClient"/>
-    </bean>
-
     <!-- SAML IdP processing filter for Web SSO profile messages. -->
     <bean id="samlIdpWebSsoProcessingFilter"
         class="org.springframework.security.saml.SAMLProcessingFilter">
