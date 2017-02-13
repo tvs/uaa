@@ -115,10 +115,13 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
         try
         {
             authorities = VmidentityUtils.getUserAuthorities(this._idmClient, userId, tenant, systemDomain);
-            logger.debug(String.format("Authorities for user '%s':", userId.getUPN()));
-            for( GrantedAuthority ga : authorities )
+            if (logger.isDebugEnabled())
             {
-                logger.debug(ga.getAuthority());
+                logger.debug(String.format("Authorities for user '%s':", userId.getUPN()));
+                for( GrantedAuthority ga : authorities )
+                {
+                    logger.debug(ga.getAuthority());
+                }
             }
         }
         catch (Exception ex)
