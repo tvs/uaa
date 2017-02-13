@@ -44,6 +44,7 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
 
     @Override
     public List<ScimGroup> retrieveAll() {
+        logger.debug("retrieveAll - not supported");
         throw new UnsupportedOperationException();
     }
 
@@ -70,14 +71,17 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
     @Override
     public ScimGroup create(ScimGroup resource) {
         try {
+            logger.debug("creating group dislay name='" + resource.getDisplayName() + "', id='" + resource.getId() + "'.");
             String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
             String name = resource.getDisplayName();
             String[] parts = name.split("@");
             if (parts.length > 2) {
+                logger.error("Invalid group name: " + name);
                 throw new InvalidScimResourceException(String.format("Invalid format for group name '%s'", name));
             } else if (parts.length == 2) {
                 if (systemDomain.equalsIgnoreCase(parts[1]) == false) {
+                    logger.error("Cannot create groups in non-system domain. " + name);
                     throw new InvalidScimResourceException("Cannot create groups in external domains.");
                 }
 
@@ -94,8 +98,10 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
             }
             return getScimGroup(group, tenant, systemDomain);
         } catch (InvalidPrincipalException ex) {
+            logger.error("create group failed...", ex);
             throw new ScimResourceNotFoundException(resource.getDisplayName());
         } catch (Exception ex) {
+            logger.error("create group failed...", ex);
             throw new IllegalStateException(String.format("Group '%s' not found in tenant '%s'.", resource.getDisplayName(), VmidentityUtils.getZoneId()), ex);
         }
     }
@@ -122,10 +128,12 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
             this._idmClient.deletePrincipal(tenant, groupId.getName());
             return sg;
         } catch (InvalidPrincipalException ex) {
+            logger.error("delete group failed...", ex);
             throw new ScimResourceNotFoundException(id);
         } catch (Exception ex) {
+            logger.error("delete group failed...", ex);
             throw new IllegalStateException(
-                    String.format("Group '%s' not found in tenant '%s'.", id, VmidentityUtils.getZoneId()), ex);
+                String.format("Group '%s' not found in tenant '%s'.", id, VmidentityUtils.getZoneId()), ex);
         }
     }
 
@@ -189,7 +197,7 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
         // TODO Auto-generated method stub
     }
 
-    private static ScimGroup getScimGroup(Group idmGroup, String tenant, String systemDomain) {
+    static ScimGroup getScimGroup(Group idmGroup, String tenant, String systemDomain) {
         String upn = VmidentityUtils.getPrincipalUpn(idmGroup.getId());
         ScimGroup group = new ScimGroup(upn, upn, tenant);
         group.setDescription(idmGroup.getDetail().getDescription());

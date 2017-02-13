@@ -45,51 +45,37 @@ public class VmidentityUserDatabase implements UaaUserDatabase {
         // mergeAuthorities(this._adminAuthorities, UaaAuthority.ADMIN_AUTHORITIES);
         // mergeAuthorities(this._regularAuthorities, UaaAuthority.USER_AUTHORITIES);
     }
-    // IdentityZoneHolder.get() gives current tenant
-    // IdentityZone.getUaa() - gets system tenant name
 
     @Override
     public UaaUser retrieveUserByName(String username, String origin) throws UsernameNotFoundException {
         try {
             String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
             UaaUser user = null;
             String[] parts = username.split("@");
             PrincipalId id = new PrincipalId(parts[0], parts[1]);
             PersonUser personUser = this._idmClient.findPersonUser(tenant, id);
 
             String upn = VmidentityUtils.getPrincipalUpn(personUser.getId());
-            // ArrayList<Attribute> attributes = new ArrayList<Attribute>(1);
-            // attributes.add(new Attribute(com.vmware.identity.idm.KnownSamlAttributes.ATTRIBUTE_USER_GROUPS));
-            // Collection<AttributeValuePair> attrs = this._idmClient.getAttributeValues(tenant, id, attributes);
-            // boolean isAdmin = false;
-            // String systemDomainAdmin = this.getSystemDomain(tenant) + "\\Administrators";
-            //
-            // if (attrs != null && attrs.iterator().hasNext()) {
-            // AttributeValuePair avp = attrs.iterator().next();
-            // if (avp != null && avp.getValues() != null) {
-            // for (String val : avp.getValues()) {
-            // if (val != null && val.equalsIgnoreCase(systemDomainAdmin)) {
-            // isAdmin = true;
-            // break;
-            // }
-            // }
-            // }
-            // }
 
-            UaaUserPrototype proto = new UaaUserPrototype().withId(upn) // todo: this should probably become objectId
-                                                           .withZoneId(tenant)
-                                                           .withUsername(upn)
-                                                           .withOrigin(origin)
-                                                           .withEmail(upn) // email is required; now idm it is optional
-                                                           .withAuthorities(this._defaultAuthorities);
+            // todo: this is a potentially big perf hit
+            // we need to make sure authorities are retrieved only *after* auth, as part of auth
+            List<GrantedAuthority> authorities = VmidentityUtils.getUserAuthorities(this._idmClient, personUser.getId(), tenant, systemDomain);
+
+            UaaUserPrototype proto =
+                new UaaUserPrototype()
+                    .withId(upn) // todo: this should probably become objectId (when all sso stack is switched)
+                    .withZoneId(tenant)
+                    .withUsername(upn)
+                    .withOrigin(origin)
+                    .withEmail(upn) // email is required; now idm it is optional
+                    .withAuthorities(authorities);
 
             if (personUser.getDetail() != null) {
-                proto = proto.withFamilyName(personUser.getDetail()
-                                                       .getLastName())
-                             .withGivenName(personUser.getDetail()
-                                                      .getFirstName())
-                             .withPasswordLastModified(new Date(personUser.getDetail()
-                                                                          .getPwdLastSet()));
+                proto =
+                    proto.withFamilyName(personUser.getDetail().getLastName())
+                    .withGivenName(personUser.getDetail().getFirstName())
+                    .withPasswordLastModified(new Date(personUser.getDetail().getPwdLastSet()));
             }
 
             user = new UaaUser(proto);
@@ -106,7 +92,8 @@ public class VmidentityUserDatabase implements UaaUserDatabase {
     public UaaUser retrieveUserById(String id) throws UsernameNotFoundException {
 
         try {
-            String systemDomain = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
+            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
 
             String[] parts = id.split("@");
             String origin = (systemDomain.equalsIgnoreCase(parts[1])) ? OriginKeys.UAA : OriginKeys.LDAP;
@@ -125,13 +112,4 @@ public class VmidentityUserDatabase implements UaaUserDatabase {
         // todo: should implement by real e-mail in future
         return this.retrieveUserByName(email, origin);
     }
-
-//    private static void mergeAuthorities(List<GrantedAuthority> target, List<? extends GrantedAuthority> merge) {
-//        for (GrantedAuthority ga : merge) {
-//            if (target.contains(ga) == false) {
-//                target.add(ga);
-//            }
-//        }
-//    }
-
 }

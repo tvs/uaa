@@ -31,10 +31,12 @@ import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.AuthenticationServiceException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.event.AuthenticationFailureBadCredentialsEvent;
 import org.springframework.security.authentication.event.AuthenticationFailureCredentialsExpiredEvent;
 import org.springframework.security.authentication.event.AuthenticationFailureLockedEvent;
+import org.springframework.security.authentication.event.AuthenticationFailureServiceExceptionEvent;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.GrantedAuthority;
@@ -50,9 +52,6 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
     private final CasIdmClient _idmClient;
     private ApplicationEventPublisher eventPublisher;
     private final List<GrantedAuthority> _defaultAuthorities;
-
-    // private IdentityProviderProvisioning providerProvisioning;
-    // private String origin;
 
     public VmidentityAuthenticationManager(CasIdmClient idmClient, Set<String> defaultAuthorities) {
         this._idmClient = idmClient;
@@ -104,45 +103,60 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
             throw e;
         } catch (Exception ex) {
             logger.warn("Auth failed for user '" + req.getName() + "'.", ex);
-            BadCredentialsException e = new BadCredentialsException(ex.getMessage());
-            publish(new AuthenticationFailureBadCredentialsEvent(req, e));
+            AuthenticationServiceException e = new AuthenticationServiceException(ex.getMessage());
+            publish(new AuthenticationFailureServiceExceptionEvent(req, e));
             throw e;
         }
 
         String upn = VmidentityUtils.getPrincipalUpn(userId);
+
+        List<GrantedAuthority> authorities = null;
+
+        try
+        {
+            authorities = VmidentityUtils.getUserAuthorities(this._idmClient, userId, tenant, systemDomain);
+            logger.debug(String.format("Authorities for user '%s':", userId.getUPN()));
+            for( GrantedAuthority ga : authorities )
+            {
+                logger.debug(ga.getAuthority());
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.warn("Auth failed for user '" + req.getName() + "'.", ex);
+            AuthenticationServiceException e = new AuthenticationServiceException(ex.getMessage());
+            publish(new AuthenticationFailureServiceExceptionEvent(req, e));
+            throw e;
+        }
 
         UaaAuthentication success = new UaaAuthentication(
                 new UaaPrincipal(
                         upn,
                         upn,
                         upn,
-                        userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : OriginKeys.LDAP, // origin?
+                        userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : OriginKeys.LDAP,
                         null, // external id
                         tenant),
-                this._defaultAuthorities, // todo: is this correct?
+                authorities,
                 (UaaAuthenticationDetails) req.getDetails());
 
         success.setAuthenticationMethods(Collections.singleton("pwd"));
 
-        UaaUserPrototype proto = new UaaUserPrototype()
-                                                       .withId(upn) // todo: this should probably become objectId
-                                                       .withZoneId(tenant)
-                                                       .withUsername(upn)
-                                                       .withOrigin(userId.getDomain().equalsIgnoreCase(systemDomain)
-                                                               ? OriginKeys.UAA : OriginKeys.LDAP)
-                                                       .withEmail(upn) // email is required; now idm it is optional //
-                                                                       // todo:
-                                                       .withAuthorities(this._defaultAuthorities);
+        UaaUserPrototype proto =
+            new UaaUserPrototype()
+               .withId(upn) // todo: this should probably become objectId
+               .withZoneId(tenant)
+               .withUsername(upn)
+               .withOrigin(
+                   userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : OriginKeys.LDAP
+               )
+               .withEmail(upn) // email is required; now idm it is optional //
+               .withAuthorities(authorities);
         publish(new UserAuthenticationSuccessEvent(new UaaUser(proto), success));
 
         return success;
     }
 
-    /*
-     * private UaaUser getUaaUser(Authentication req) { try { UaaUser user =
-     * userDatabase.retrieveUserByName(req.getName().toLowerCase(Locale.US), getOrigin()); if (user!=null) { return
-     * user; } } catch (UsernameNotFoundException e) { } return null; }
-     */
     private void publish(ApplicationEvent event) {
         if (eventPublisher != null) {
             eventPublisher.publishEvent(event);

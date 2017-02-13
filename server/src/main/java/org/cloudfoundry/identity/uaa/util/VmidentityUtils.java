@@ -12,13 +12,21 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.util;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Locale;
 
+import org.cloudfoundry.identity.uaa.scim.exception.InvalidScimResourceException;
+import org.cloudfoundry.identity.uaa.user.UaaAuthority;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
+import com.vmware.identity.idm.Attribute;
+import com.vmware.identity.idm.AttributeValuePair;
 import com.vmware.identity.idm.DomainType;
 import com.vmware.identity.idm.IIdentityStoreData;
 import com.vmware.identity.idm.PrincipalId;
@@ -63,4 +71,68 @@ public class VmidentityUtils {
         return userId.getName() + "@" + userId.getDomain().toUpperCase(Locale.ENGLISH);
     }
 
+    public static List<GrantedAuthority> getUserAuthorities(CasIdmClient idmClient, PrincipalId userId, String tenant, String systemDomain) throws Exception
+    {
+        // for now, we are implementing scopes as groups in system domain.
+        // todo: we should implement other UAA strategies later.
+        ArrayList<GrantedAuthority> authorities = new ArrayList<GrantedAuthority>();
+
+        ArrayList<Attribute> attributes = new ArrayList<Attribute>(1);
+        attributes.add(new Attribute(com.vmware.identity.idm.KnownSamlAttributes.ATTRIBUTE_USER_GROUPS));
+        Collection<AttributeValuePair> attrs = idmClient.getAttributeValues(tenant, userId, attributes);
+        boolean isAdmin = false;
+        String systemDomainPrefix = systemDomain + "\\";
+        String systemDomainAdmin = systemDomainPrefix + "Administrator";
+        systemDomainPrefix = systemDomainPrefix.toUpperCase(Locale.ENGLISH);
+        int systemDomainPrefixLength = systemDomainPrefix.length();
+
+        if (attrs != null && attrs.iterator().hasNext())
+        {
+            AttributeValuePair avp = attrs.iterator().next();
+            if (avp != null && avp.getValues() != null)
+            {
+                for (String val : avp.getValues())
+                {
+                    if ( val != null )
+                    {
+                        if ( ( isAdmin == false ) && ( val.equalsIgnoreCase(systemDomainAdmin) ) )
+                        {
+                            isAdmin = true;
+                            authorities.addAll(UaaAuthority.ADMIN_AUTHORITIES);
+                               SimpleGrantedAuthority grantedAuthority = new SimpleGrantedAuthority(val.substring(systemDomainPrefixLength));
+                               authorities.add(grantedAuthority);
+                        }
+                        else if ( val.toUpperCase(Locale.ENGLISH).startsWith(systemDomainPrefix) )
+                        {
+                            SimpleGrantedAuthority grantedAuthority = new SimpleGrantedAuthority(val.substring(systemDomainPrefixLength));
+                            authorities.add(grantedAuthority);
+                        }
+                    }
+                }
+            }
+        }
+
+        if ( isAdmin == false )
+        {
+            authorities.addAll(UaaAuthority.USER_AUTHORITIES);
+        }
+
+        return authorities;
+    }
+
+    // assumes Upn
+    public static PrincipalId getPrincipalId(String id)
+    {
+        PrincipalId principal = null;
+        String[] parts = id.split("@");
+        if (parts.length != 2)
+        {
+            throw new IllegalArgumentException(String.format("Invalid format for user id '%s'", id));
+        }
+        else
+        {
+            principal = new PrincipalId(parts[0], parts[1]);
+        }
+        return principal;
+    }
 }

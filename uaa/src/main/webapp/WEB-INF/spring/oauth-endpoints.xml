@@ -489,9 +489,12 @@
         <property name="refreshTokenValidity" value="${jwt.token.policy.global.refreshTokenValiditySeconds:2592000}" />
     </bean>
 
+<!--
     <bean id="revocableTokenProvisioning" class="org.cloudfoundry.identity.uaa.oauth.token.JdbcRevocableTokenProvisioning">
         <constructor-arg name="jdbcTemplate" ref="jdbcTemplate"/>
     </bean>
+-->
+    <bean id="revocableTokenProvisioning" class="org.cloudfoundry.identity.uaa.oauth.token.VmidentityRevocableTokenProvisioning" />
 
     <bean id="tokenServices" class="org.cloudfoundry.identity.uaa.oauth.UaaTokenServices">
         <property name="clientDetailsService" ref="jdbcClientDetailsService" />

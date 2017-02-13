@@ -195,6 +195,8 @@ public class ClientAdminBootstrap implements InitializingBean {
     }
 
     private void addNewClients() throws Exception {
+        logger.debug(String.format("Adding clients: clients %d", clients.entrySet().size()));
+
         for (Map.Entry<String, Map<String, Object>> entry : clients.entrySet()) {
             String clientId = entry.getKey();
             Map<String, Object> map = entry.getValue();
@@ -234,6 +236,7 @@ public class ClientAdminBootstrap implements InitializingBean {
 
             client.setAdditionalInformation(info);
             try {
+                logger.debug("Adding client: " + client.getClientId());
                 clientRegistrationService.addClientDetails(client);
             } catch (ClientAlreadyExistsException e) {
                 if (override == null || override) {
@@ -244,7 +247,7 @@ public class ClientAdminBootstrap implements InitializingBean {
                     }
                 } else {
                     // ignore it
-                    logger.debug(e.getMessage());
+                    logger.debug(String.format("Ignoring client '%s'. %s", client.getClientId(), e.getMessage()));
                 }
             }
             ClientMetadata clientMetadata = buildClientMetadata(map, clientId);
