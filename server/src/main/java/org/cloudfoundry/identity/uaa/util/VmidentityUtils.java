@@ -58,6 +58,18 @@ public class VmidentityUtils {
         return zoneId;
     }
 
+    public static String getTenantName(CasIdmClient idmClient) throws Exception {
+        String zoneId = IdentityZoneHolder.get().getId();
+        return getTenantName(zoneId, idmClient);
+    }
+
+    public static String getTenantName(String zoneId, CasIdmClient idmClient) throws Exception {
+        if (zoneId.equalsIgnoreCase(IdentityZone.getUaa().getId())) {
+            zoneId = idmClient.getSystemTenant();
+        }
+        return zoneId;
+    }
+
     public static String getZoneId() {
         String zoneId = IdentityZoneHolder.get().getId();
 
