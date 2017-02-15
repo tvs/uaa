@@ -1,16 +1,34 @@
+/*******************************************************************************
+ *     Cloud Foundry
+ *     Copyright (c) [2017] VMware, Inc. All Rights Reserved.
+ *
+ *     This product is licensed to you under the Apache License, Version 2.0 (the "License").
+ *     You may not use this product except in compliance with the License.
+ *
+ *     This product includes a number of subcomponents with
+ *     separate copyright notices and license terms. Your use of these
+ *     subcomponents is subject to the terms and conditions of the
+ *     subcomponent's license, as noted in the LICENSE file.
+ *******************************************************************************/
 package org.cloudfoundry.identity.uaa.zone;
 
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.cloudfoundry.identity.uaa.audit.event.SystemDeletable;
+import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
-import org.cloudfoundry.identity.uaa.resources.ResourceMonitor;
+import org.cloudfoundry.identity.uaa.util.CachingPasswordEncoder;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.AuthorityUtils;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.provider.ClientAlreadyExistsException;
 import org.springframework.security.oauth2.provider.ClientDetails;
 import org.springframework.security.oauth2.provider.ClientRegistrationException;
@@ -24,16 +42,18 @@ import com.vmware.identity.idm.NoSuchOIDCClientException;
 import com.vmware.identity.idm.OIDCClient;
 import com.vmware.identity.idm.client.CasIdmClient;
 
-public class MultitenantVmidentityClientDetailsService implements ClientServicesExtension,
-    ResourceMonitor<ClientDetails>, SystemDeletable {
+public class MultitenantVmidentityClientDetailsService implements MultitenantClientDetailsService {
 
     private static final Log logger = LogFactory.getLog(MultitenantVmidentityClientDetailsService.class);
+    private static PasswordEncoder passwordEncoder;
 
     private CasIdmClient idmClient;
 
-    public MultitenantVmidentityClientDetailsService(CasIdmClient idmClient) {
+    public MultitenantVmidentityClientDetailsService(CasIdmClient idmClient) throws NoSuchAlgorithmException {
         Assert.notNull(idmClient, "CasIdmClient required");
         this.idmClient = idmClient;
+        passwordEncoder = new CachingPasswordEncoder();
+        ((CachingPasswordEncoder) passwordEncoder).setPasswordEncoder(new BCryptPasswordEncoder());
     }
 
     @Override
@@ -95,7 +115,7 @@ public class MultitenantVmidentityClientDetailsService implements ClientServices
 
             List<ClientDetails> details = new ArrayList<ClientDetails>(clients.size());
             for (OIDCClient client : clients) {
-                details.add(mapOIDCClient(client, tenant, idmClient));
+                details.add(mapOIDCClient(client, tenant, idmClient, passwordEncoder));
             }
 
             return details;
@@ -111,7 +131,7 @@ public class MultitenantVmidentityClientDetailsService implements ClientServices
 
         try {
             String tenant = VmidentityUtils.getTenantName(idmClient);
-            details = mapOIDCClient(idmClient.getOIDCClient(tenant, clientId), tenant, idmClient);
+            details = mapOIDCClient(idmClient.getOIDCClient(tenant, clientId), tenant, idmClient, passwordEncoder);
         } catch (NoSuchOIDCClientException e) {
             logger.error("Unable to load client with id: " + clientId, e);
             throw new NoSuchClientException("No client with requested id: " + clientId);
@@ -181,8 +201,15 @@ public class MultitenantVmidentityClientDetailsService implements ClientServices
     }
 
     private static OIDCClient mapClientDetails(ClientDetails details) {
-        OIDCClient.Builder builder = new OIDCClient.Builder(details.getClientId())
-                .redirectUris(new ArrayList<String>(details.getRegisteredRedirectUri()));
+        OIDCClient.Builder builder = new OIDCClient.Builder(details.getClientId());
+        ArrayList<String> redirectUris = new ArrayList<String>();
+        if (details.getRegisteredRedirectUri() != null) {
+            redirectUris.addAll(details.getRegisteredRedirectUri());
+        } else {
+            // FIXME We shouldn't have to have a redirect URI for a client to be valid...
+            redirectUris.add("https://jibberish.com/" + details.getClientId());
+        }
+        builder.redirectUris(redirectUris);
         // builder.resourceIds(details.getResourceIds()); TODO resource IDs
         // builder.scope(details.getScope()); TODO scope
         // builder.authorizedGrantTypes(details.getAuthorizedGrantTypes()); TODO grant types
@@ -218,21 +245,21 @@ public class MultitenantVmidentityClientDetailsService implements ClientServices
         return builder.build();
     }
 
-    private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient) throws Exception {
+    private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
         BaseClientDetails details = new BaseClientDetails();
         details.setClientId(client.getClientId());
-        // details.setClientSecret(client.getSecret()); TODO client secret
+        details.setClientSecret(passwordEncoder.encode("secret")); // TODO client secret
         // details.setResourceIds(client.getResourceIds()); TODO resource IDs
-        // details.setScope(client.getScope()); TODO Scope
-        // details.setAuthorizedGrantTypes(client.getGrantTypes()); TODO Grant types
-        // details.setAuthorities(client.getAuthorities()); TODO authorities
+        details.setScope(Arrays.asList(new String[] { "uaa.none" })); // TODO Scope
+        details.setAuthorizedGrantTypes(Arrays.asList(new String[] { "client_credentials" })); // TODO Grant types
+        details.setAuthorities(AuthorityUtils.commaSeparatedStringToAuthorityList("uaa.admin,clients.read,clients.write,clients.secret,scim.read,scim.write,clients.admin")); // TODO authorities
         details.setRegisteredRedirectUri(new HashSet<String>(client.getRedirectUris()));
         details.setAccessTokenValiditySeconds(
                 Ints.saturatedCast(idmClient.getMaximumBearerTokenLifetime(tenant) / 1000));
         details.setRefreshTokenValiditySeconds(
                 Ints.saturatedCast(idmClient.getMaximumBearerRefreshTokenLifetime(tenant) / 1000));
 
-        // details.setAutoApproveScopes(null); TODO auto approve scopes
+        details.setAutoApproveScopes(Arrays.asList(new String[] { "true" })); // TODO auto approve scopes
         // details.addAdditionalInformation("lastModified", client.getLastModified()); TODO last modified
 
         return details;

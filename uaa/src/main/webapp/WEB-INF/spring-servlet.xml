@@ -410,7 +410,7 @@
         <property name="uaaBaseUrl" ref="uaaUrl" />
         <property name="entityID" ref="samlEntityID"/>
         <property name="idpDefinitions" ref="metaDataProviders"/>
-        <property name="clientDetailsService" ref="jdbcClientDetailsService"/>
+        <property name="clientDetailsService" ref="vmidentityClientDetailsService"/>
         <property name="expiringCodeStore" ref="codeStore"/>
         <property name="externalLoginUrl" value="${login.url:''}"/>
         <property name="providerProvisioning" ref="identityProviderProvisioning"/>
@@ -476,7 +476,7 @@
 
     <bean id="autologinAuthenticationManager" class="org.cloudfoundry.identity.uaa.authentication.manager.AutologinAuthenticationManager">
         <property name="expiringCodeStore" ref="codeStore" />
-        <property name="clientDetailsService" ref="jdbcClientDetailsService"/>
+        <property name="clientDetailsService" ref="vmidentityClientDetailsService"/>
         <property name="userDatabase" ref="userDatabase"/>
     </bean>
 
