@@ -37,7 +37,7 @@
         <constructor-arg ref="uaa"/>
         <property name="clientId" value="login"/>
         <property name="tokenServices" ref="tokenServices"/>
-        <property name="clientDetailsService" ref="jdbcClientDetailsService"/>
+        <property name="clientDetailsService" ref="vmidentityClientDetailsService"/>
         <property name="verifySsl" value="${notifications.verify_ssl:false}"/>
     </bean>
 
@@ -404,7 +404,7 @@
     </bean>
 
     <bean id="logoutHandler" class="org.cloudfoundry.identity.uaa.authentication.ZoneAwareWhitelistLogoutHandler">
-        <constructor-arg ref="jdbcClientDetailsService"/>
+        <constructor-arg ref="vmidentityClientDetailsService"/>
     </bean>
 
     <!--<mvc:resources location="/" mapping="/**" />-->
@@ -537,7 +537,7 @@
     <bean name="invitationsEndpoint" class="org.cloudfoundry.identity.uaa.invitations.InvitationsEndpoint">
         <constructor-arg name="users" ref="scimUserProvisioning"/>
         <constructor-arg name="providers" ref="identityProviderProvisioning"/>
-        <constructor-arg name="clients" ref="jdbcClientDetailsService"/>
+        <constructor-arg name="clients" ref="vmidentityClientDetailsService"/>
         <constructor-arg name="expiringCodeStore" ref="codeStore"/>
     </bean>
 
@@ -636,7 +636,7 @@
         <constructor-arg ref="messageService"/>
         <constructor-arg ref="codeStore"/>
         <constructor-arg ref="scimUserProvisioning"/>
-        <constructor-arg ref="jdbcClientDetailsService"/>
+        <constructor-arg ref="vmidentityClientDetailsService"/>
         <constructor-arg ref="uaaPasswordValidator"/>
     </bean>
 
@@ -660,13 +660,13 @@
         <constructor-arg ref="scimUserProvisioning"/>
         <constructor-arg ref="codeStore"/>
         <constructor-arg ref="uaaPasswordValidator"/>
-        <constructor-arg ref="jdbcClientDetailsService"/>
+        <constructor-arg ref="vmidentityClientDetailsService"/>
     </bean>
 
     <bean id="changeEmailService" class="org.cloudfoundry.identity.uaa.account.EmailChangeEmailService">
         <constructor-arg ref="mailTemplateEngine"/>
         <constructor-arg ref="messageService"/>
-        <constructor-arg ref="jdbcClientDetailsService"/>
+        <constructor-arg ref="vmidentityClientDetailsService"/>
         <constructor-arg ref="scimUserProvisioning"/>
         <constructor-arg ref="codeStore"/>
     </bean>

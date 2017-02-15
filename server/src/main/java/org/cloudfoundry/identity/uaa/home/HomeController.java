@@ -12,11 +12,21 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.home;
 
+import static org.springframework.util.StringUtils.hasText;
+
+import java.net.URISyntaxException;
+import java.security.Principal;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import javax.servlet.http.HttpServletRequest;
+
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.apache.http.client.utils.URIBuilder;
 import org.cloudfoundry.identity.uaa.client.ClientMetadata;
-import org.cloudfoundry.identity.uaa.client.JdbcClientMetadataProvisioning;
+import org.cloudfoundry.identity.uaa.client.ClientMetadataProvisioning;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneConfiguration;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
@@ -28,20 +38,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.RequestMapping;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.net.MalformedURLException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.security.Principal;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import static org.springframework.util.StringUtils.hasText;
-
 @Controller
 public class HomeController {
     private final Log logger = LogFactory.getLog(getClass());
@@ -50,7 +46,7 @@ public class HomeController {
     private String baseUrl;
 
     @Autowired
-    private JdbcClientMetadataProvisioning clientMetadataProvisioning;
+    private ClientMetadataProvisioning clientMetadataProvisioning;
 
     public HomeController(Environment environment) {
         this.environment = environment;

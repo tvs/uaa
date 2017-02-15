@@ -44,7 +44,7 @@
         <property name="messageConverters">
             <bean class="org.cloudfoundry.identity.uaa.web.ExceptionReportHttpMessageConverter" />
         </property>
-        <property name="clientDetailsService" ref="jdbcClientDetailsService" />
+        <property name="clientDetailsService" ref="vmidentityClientDetailsService" />
     </bean>
 
     <http name="approvalsSecurity" pattern="/approvals/**" create-session="stateless" authentication-manager-ref="emptyAuthenticationManager"
