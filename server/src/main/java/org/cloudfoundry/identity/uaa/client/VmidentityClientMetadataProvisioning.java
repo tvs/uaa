@@ -81,7 +81,9 @@ public class VmidentityClientMetadataProvisioning implements ClientMetadataProvi
                     .postLogoutRedirectUris(client.getPostLogoutRedirectUris())
                     .redirectUris(client.getRedirectUris())
                     .tokenEndpointAuthMethod(client.getTokenEndpointAuthMethod())
-                    .tokenEndpointAuthSigningAlg(client.getTokenEndpointAuthSigningAlg());
+                    .tokenEndpointAuthSigningAlg(client.getTokenEndpointAuthSigningAlg())
+                    .authorities(client.getAuthorities())
+                    .clientSecret(client.getClientSecret());
 
             // TODO:
             // resource.isShowOnHomePage();
