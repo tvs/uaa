@@ -23,11 +23,9 @@ import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
-import org.cloudfoundry.identity.uaa.util.CachingPasswordEncoder;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.provider.ClientAlreadyExistsException;
 import org.springframework.security.oauth2.provider.ClientDetails;
@@ -37,6 +35,7 @@ import org.springframework.security.oauth2.provider.client.BaseClientDetails;
 import org.springframework.util.Assert;
 
 import com.google.common.primitives.Ints;
+import com.vmware.identity.idm.DuplicatedOIDCClientException;
 import com.vmware.identity.idm.DuplicatedOIDCRedirectURLException;
 import com.vmware.identity.idm.NoSuchOIDCClientException;
 import com.vmware.identity.idm.OIDCClient;
@@ -45,26 +44,29 @@ import com.vmware.identity.idm.client.CasIdmClient;
 public class MultitenantVmidentityClientDetailsService implements MultitenantClientDetailsService {
 
     private static final Log logger = LogFactory.getLog(MultitenantVmidentityClientDetailsService.class);
-    private static PasswordEncoder passwordEncoder;
 
-    private CasIdmClient idmClient;
+    private final CasIdmClient idmClient;
+    private final PasswordEncoder passwordEncoder;
 
-    public MultitenantVmidentityClientDetailsService(CasIdmClient idmClient) throws NoSuchAlgorithmException {
+    public MultitenantVmidentityClientDetailsService(CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws NoSuchAlgorithmException {
         Assert.notNull(idmClient, "CasIdmClient required");
         this.idmClient = idmClient;
-        passwordEncoder = new CachingPasswordEncoder();
-        ((CachingPasswordEncoder) passwordEncoder).setPasswordEncoder(new BCryptPasswordEncoder());
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
     public void addClientDetails(ClientDetails clientDetails) throws ClientAlreadyExistsException {
         try {
             String tenant = VmidentityUtils.getTenantName(idmClient);
-            OIDCClient client = mapClientDetails(clientDetails);
+            // Encode password here...
+            OIDCClient client = mapClientDetails(clientDetails, passwordEncoder);
             idmClient.addOIDCClient(tenant, client);
+        } catch (DuplicatedOIDCClientException e) {
+            logger.error("Client with ID already exists: " + clientDetails.getClientId(), e);
+            throw new ClientAlreadyExistsException("Client already exists: " + clientDetails.getClientId());
         } catch (DuplicatedOIDCRedirectURLException e) {
             logger.error("Client with registered redirect already exists: " + clientDetails.getRegisteredRedirectUri(), e);
-            throw new ClientAlreadyExistsException("Client already exists: " + clientDetails.getRegisteredRedirectUri());
+            throw new ClientAlreadyExistsException("Client with registered redirect already exists: " + clientDetails.getRegisteredRedirectUri());
         } catch (Exception e) {
             logger.error("Unable to add client details", e);
             throw new VmidentityDataAccessException("Unable to add client details");
@@ -76,7 +78,8 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
     public void updateClientDetails(ClientDetails clientDetails) throws NoSuchClientException {
         try {
             String tenant = VmidentityUtils.getTenantName(idmClient);
-            OIDCClient client = mapClientDetails(clientDetails);
+            // TODO Skip password encoding...
+            OIDCClient client = mapClientDetails(clientDetails, passwordEncoder);
             idmClient.setOIDCClient(tenant, client);
         } catch (NoSuchOIDCClientException e) {
             logger.error("No client found with id: " + clientDetails.getClientId() + " in identity zone " + IdentityZoneHolder.get().getName(), e);
@@ -200,25 +203,34 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
 
     }
 
-    private static OIDCClient mapClientDetails(ClientDetails details) {
+    private static List<String> authoritiesToListOfStrings(Collection<GrantedAuthority> authorities) {
+        List<String> stringAuthorities = new ArrayList<String>(authorities.size());
+
+        for (GrantedAuthority authority : authorities) {
+            stringAuthorities.add(authority.getAuthority());
+        }
+
+        return stringAuthorities;
+    }
+
+    private static OIDCClient mapClientDetails(ClientDetails details, PasswordEncoder passwordEncoder) {
         OIDCClient.Builder builder = new OIDCClient.Builder(details.getClientId());
         ArrayList<String> redirectUris = new ArrayList<String>();
         if (details.getRegisteredRedirectUri() != null) {
             redirectUris.addAll(details.getRegisteredRedirectUri());
-        } else {
-            // FIXME We shouldn't have to have a redirect URI for a client to be valid...
-            redirectUris.add("https://jibberish.com/" + details.getClientId());
         }
         builder.redirectUris(redirectUris);
         // builder.resourceIds(details.getResourceIds()); TODO resource IDs
         // builder.scope(details.getScope()); TODO scope
         // builder.authorizedGrantTypes(details.getAuthorizedGrantTypes()); TODO grant types
-        // builder.authorities(details.getAuthorities()); TODO authorities
+        builder.authorities(authoritiesToListOfStrings(details.getAuthorities()));
+
         // builder.accessTokenValiditySeconds(details.getAccessTokenValiditySeconds()); TODO access token validity
         // builder.refreshTokenValiditySeconds(details.getRefreshTokenValiditySeconds()); TODO refresh token validity
 
-        // TODO Client secret
-        // builder.secret(details.getClientSecret());
+        if (details.getClientSecret() != null) {
+            builder.clientSecret(passwordEncoder.encode(details.getClientSecret()));
+        }
         // TODO Auto Approve Scopes
         // Set<String> autoApproveScopes = new HashSet<String>();
         // Map<String, Object> additionalInformation = details.getAdditionalInformation();
@@ -248,11 +260,13 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
     private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
         BaseClientDetails details = new BaseClientDetails();
         details.setClientId(client.getClientId());
-        details.setClientSecret(passwordEncoder.encode("secret")); // TODO client secret
+        details.setClientSecret(client.getClientSecret()); // TODO client secret
         // details.setResourceIds(client.getResourceIds()); TODO resource IDs
-        details.setScope(Arrays.asList(new String[] { "uaa.none" })); // TODO Scope
-        details.setAuthorizedGrantTypes(Arrays.asList(new String[] { "client_credentials" })); // TODO Grant types
-        details.setAuthorities(AuthorityUtils.commaSeparatedStringToAuthorityList("uaa.admin,clients.read,clients.write,clients.secret,scim.read,scim.write,clients.admin")); // TODO authorities
+        // details.setScope(Arrays.asList(new String[] { "uaa.none" })); // TODO Scope
+        // details.setAuthorizedGrantTypes(Arrays.asList(new String[] { "client_credentials" })); // TODO Grant types
+        if (client.getAuthorities() != null) {
+            details.setAuthorities(AuthorityUtils.createAuthorityList(client.getAuthorities().toArray(new String[0])));
+        }
         details.setRegisteredRedirectUri(new HashSet<String>(client.getRedirectUris()));
         details.setAccessTokenValiditySeconds(
                 Ints.saturatedCast(idmClient.getMaximumBearerTokenLifetime(tenant) / 1000));
