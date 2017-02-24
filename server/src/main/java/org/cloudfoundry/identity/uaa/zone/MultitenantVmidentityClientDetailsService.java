@@ -14,15 +14,18 @@ package org.cloudfoundry.identity.uaa.zone;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
+import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -58,8 +61,11 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
     public void addClientDetails(ClientDetails clientDetails) throws ClientAlreadyExistsException {
         try {
             String tenant = VmidentityUtils.getTenantName(idmClient);
-            // Encode password here...
-            OIDCClient client = mapClientDetails(clientDetails, passwordEncoder);
+            String encodedSecret = null;
+            if (clientDetails.getClientSecret() != null) {
+                encodedSecret = passwordEncoder.encode(clientDetails.getClientSecret());
+            }
+            OIDCClient client = mapClientDetails(clientDetails, encodedSecret);
             idmClient.addOIDCClient(tenant, client);
         } catch (DuplicatedOIDCClientException e) {
             logger.error("Client with ID already exists: " + clientDetails.getClientId(), e);
@@ -78,8 +84,8 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
     public void updateClientDetails(ClientDetails clientDetails) throws NoSuchClientException {
         try {
             String tenant = VmidentityUtils.getTenantName(idmClient);
-            // TODO Skip password encoding...
-            OIDCClient client = mapClientDetails(clientDetails, passwordEncoder);
+            ClientDetails previous = loadClientByClientId(clientDetails.getClientId());
+            OIDCClient client = mapClientDetails(clientDetails, previous.getClientSecret());
             idmClient.setOIDCClient(tenant, client);
         } catch (NoSuchOIDCClientException e) {
             logger.error("No client found with id: " + clientDetails.getClientId() + " in identity zone " + IdentityZoneHolder.get().getName(), e);
@@ -92,8 +98,18 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
 
     @Override
     public void updateClientSecret(String clientId, String secret) throws NoSuchClientException {
-        // TODO Auto-generated method stub
-
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            ClientDetails clientDetails = loadClientByClientId(clientId);
+            OIDCClient client = mapClientDetails(clientDetails, passwordEncoder.encode(secret));
+            idmClient.setOIDCClient(tenant, client);
+        } catch (NoSuchOIDCClientException e) {
+            logger.error("No client found with id: " + clientId + " in identity zone " + IdentityZoneHolder.get().getName(), e);
+            throw new NoSuchClientException("No client found with id = " + clientId + " in identity zone " + IdentityZoneHolder.get().getName());
+        } catch (Exception e) {
+            logger.error("Unable to update client secret with id: " + clientId, e);
+            throw new VmidentityDataAccessException("Unable to update client secret");
+        }
     }
 
     @Override
@@ -193,14 +209,108 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
 
     @Override
     public void addClientSecret(String clientId, String newSecret) throws NoSuchClientException {
-        // TODO Auto-generated method stub
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            ClientDetails clientDetails = loadClientByClientId(clientId);
 
+            String encodedNewSecret = passwordEncoder.encode(newSecret);
+            StringBuilder newSecretBuilder = new StringBuilder().append(clientDetails.getClientSecret() == null ? "" : clientDetails.getClientSecret() + " ").append(encodedNewSecret);
+            OIDCClient client = mapClientDetails(clientDetails, newSecretBuilder.toString());
+            idmClient.setOIDCClient(tenant, client);
+        } catch (NoSuchOIDCClientException e) {
+            logger.error("No client found with id: " + clientId + " in identity zone " + IdentityZoneHolder.get().getName(), e);
+            throw new NoSuchClientException("No client found with id = " + clientId + " in identity zone " + IdentityZoneHolder.get().getName());
+        } catch (Exception e) {
+            logger.error("Unable to add client secret with id: " + clientId, e);
+            throw new VmidentityDataAccessException("Unable to add client secret");
+        }
     }
 
     @Override
     public void deleteClientSecret(String clientId) throws NoSuchClientException {
-        // TODO Auto-generated method stub
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            ClientDetails clientDetails = loadClientByClientId(clientId);
+            String clientSecret = clientDetails.getClientSecret().split(" ")[1];
+            OIDCClient client = mapClientDetails(clientDetails, clientSecret);
+            idmClient.setOIDCClient(tenant, client);
+        } catch (NoSuchOIDCClientException e) {
+            logger.error("No client found with id: " + clientId + " in identity zone " + IdentityZoneHolder.get().getName(), e);
+            throw new NoSuchClientException("No client found with id = " + clientId + " in identity zone " + IdentityZoneHolder.get().getName());
+        } catch (Exception e) {
+            logger.error("Unable t update client secret with id: " + clientId, e);
+            throw new VmidentityDataAccessException("Unable to update client secret");
+        }
+    }
 
+    private static OIDCClient mapClientDetails(ClientDetails details, String clientSecret) {
+        OIDCClient.Builder builder = new OIDCClient.Builder(details.getClientId());
+        // It would be better to treat these as 'Collection' types instead...
+        builder.redirectUris(convertToList(details.getRegisteredRedirectUri()));
+        builder.resourceIds(convertToList(details.getResourceIds()));
+        builder.scopes(convertToList(details.getScope()));
+        builder.authorizedGrantTypes(convertToList(details.getAuthorizedGrantTypes()));
+        builder.authorities(authoritiesToListOfStrings(details.getAuthorities()));
+
+        // builder.accessTokenValiditySeconds(details.getAccessTokenValiditySeconds()); TODO access token validity
+        // builder.refreshTokenValiditySeconds(details.getRefreshTokenValiditySeconds()); TODO refresh token validity
+
+        if (clientSecret != null) {
+            builder.clientSecret(clientSecret);
+        }
+
+        Set<String> autoApproveScopes = new HashSet<String>();
+        Map<String, Object> additionalInformation = details.getAdditionalInformation();
+        Object autoApprovedFromAddInfo = additionalInformation.get(ClientConstants.AUTO_APPROVE);
+        if (autoApprovedFromAddInfo != null) {
+           if ((autoApprovedFromAddInfo instanceof Boolean && (Boolean) autoApprovedFromAddInfo || "true".equals(autoApprovedFromAddInfo))) {
+               autoApproveScopes.add("true");
+           } else if (autoApprovedFromAddInfo instanceof Collection<?>) {
+               @SuppressWarnings("unchecked")
+               Collection<? extends String> approvedScopes = (Collection<? extends String>) autoApprovedFromAddInfo;
+               autoApproveScopes.addAll(approvedScopes);
+           }
+        }
+        builder.autoApproveScopes(convertToList(autoApproveScopes));
+
+        return builder.build();
+    }
+
+    private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
+        BaseClientDetails details = new BaseClientDetails();
+        details.setClientId(client.getClientId());
+        details.setClientSecret(client.getClientSecret());
+        details.setRegisteredRedirectUri(new HashSet<String>(client.getRedirectUris()));
+        details.setAccessTokenValiditySeconds(
+                Ints.saturatedCast(idmClient.getMaximumBearerTokenLifetime(tenant) / 1000));
+        details.setRefreshTokenValiditySeconds(
+                Ints.saturatedCast(idmClient.getMaximumBearerRefreshTokenLifetime(tenant) / 1000));
+
+        if (client.getResourceIds() != null) {
+            details.setResourceIds(client.getResourceIds());
+        }
+
+        if (client.getScopes() != null) {
+            details.setScope(client.getScopes());
+        }
+
+        if (client.getAuthorizedGrantTypes() != null) {
+            details.setAuthorizedGrantTypes(client.getAuthorizedGrantTypes());
+        }
+
+        if (client.getAuthorities() != null) {
+            details.setAuthorities(AuthorityUtils.createAuthorityList(client.getAuthorities().toArray(new String[0])));
+        }
+
+        if (client.getAutoApproveScopes() != null) {
+            details.setAutoApproveScopes(client.getAutoApproveScopes());
+        }
+
+        if (client.getAdditionalInformation() != null) {
+            details.setAdditionalInformation(client.getAdditionalInformation());
+        }
+
+        return details;
     }
 
     private static List<String> authoritiesToListOfStrings(Collection<GrantedAuthority> authorities) {
@@ -213,72 +323,13 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         return stringAuthorities;
     }
 
-    private static OIDCClient mapClientDetails(ClientDetails details, PasswordEncoder passwordEncoder) {
-        OIDCClient.Builder builder = new OIDCClient.Builder(details.getClientId());
-        ArrayList<String> redirectUris = new ArrayList<String>();
-        if (details.getRegisteredRedirectUri() != null) {
-            redirectUris.addAll(details.getRegisteredRedirectUri());
+    private static List<String> convertToList(Collection<String> collection) {
+        List<String> list = Collections.emptyList();
+        if (collection != null) {
+            list = new ArrayList<String>(collection.size());
+            list.addAll(collection);
         }
-        builder.redirectUris(redirectUris);
-        // builder.resourceIds(details.getResourceIds()); TODO resource IDs
-        // builder.scope(details.getScope()); TODO scope
-        // builder.authorizedGrantTypes(details.getAuthorizedGrantTypes()); TODO grant types
-        builder.authorities(authoritiesToListOfStrings(details.getAuthorities()));
-
-        // builder.accessTokenValiditySeconds(details.getAccessTokenValiditySeconds()); TODO access token validity
-        // builder.refreshTokenValiditySeconds(details.getRefreshTokenValiditySeconds()); TODO refresh token validity
-
-        if (details.getClientSecret() != null) {
-            builder.clientSecret(passwordEncoder.encode(details.getClientSecret()));
-        }
-        // TODO Auto Approve Scopes
-        // Set<String> autoApproveScopes = new HashSet<String>();
-        // Map<String, Object> additionalInformation = details.getAdditionalInformation();
-        // Object autoApprovedFromAddInfo = additionalInformation.remove(ClientConstants.AUTO_APPROVE);
-        // if (autoApprovedFromAddInfo != null) {
-        //    if ((autoApprovedFromAddInfo instanceof Boolean && (Boolean) autoApprovedFromAddInfo || "true".equals(autoApprovedFromAddInfo))) {
-        //        autoApproveScopes.add("true");
-        //    } else if (autoApprovedFromAddInfo instanceof Collection<?>) {
-        //        @SuppressWarnings("unchecked")
-        //        Collection<? extends String> approvedScopes = (Collection<? extends String>) autoApprovedFromAddInfo;
-        //        autoApproveScopes.addAll(approvedScopes);
-        //    }
-        // }
-        // builder.autoApproveScopes(autoApproveScopes);
-        //
-        // TODO lastModified
-        // Object timestamp = additionalInformation.remove("lastModified");
-        // if (timestamp != null) {
-        //    if (timestamp instanceof Timestamp) {
-        //       builder.lastModified((Timestamp) timestamp);
-        //    }
-        // }
-
-        return builder.build();
+        return list;
     }
-
-    private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
-        BaseClientDetails details = new BaseClientDetails();
-        details.setClientId(client.getClientId());
-        details.setClientSecret(client.getClientSecret()); // TODO client secret
-        // details.setResourceIds(client.getResourceIds()); TODO resource IDs
-        // details.setScope(Arrays.asList(new String[] { "uaa.none" })); // TODO Scope
-        // details.setAuthorizedGrantTypes(Arrays.asList(new String[] { "client_credentials" })); // TODO Grant types
-        if (client.getAuthorities() != null) {
-            details.setAuthorities(AuthorityUtils.createAuthorityList(client.getAuthorities().toArray(new String[0])));
-        }
-        details.setRegisteredRedirectUri(new HashSet<String>(client.getRedirectUris()));
-        details.setAccessTokenValiditySeconds(
-                Ints.saturatedCast(idmClient.getMaximumBearerTokenLifetime(tenant) / 1000));
-        details.setRefreshTokenValiditySeconds(
-                Ints.saturatedCast(idmClient.getMaximumBearerRefreshTokenLifetime(tenant) / 1000));
-
-        details.setAutoApproveScopes(Arrays.asList(new String[] { "true" })); // TODO auto approve scopes
-        // details.addAdditionalInformation("lastModified", client.getLastModified()); TODO last modified
-
-        return details;
-    }
-
-
 
 }
