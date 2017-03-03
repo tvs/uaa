@@ -23,6 +23,7 @@ import java.util.Map;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
+import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.util.Assert;
 
@@ -125,9 +126,7 @@ public class VmidentityClientMetadataProvisioning implements ClientMetadataProvi
         Map<String, Object> additionalInformation = client.getAdditionalInformation();
         if (additionalInformation != null) {
             Object showOnHomepageFromAddInfo = additionalInformation.get(CLIENT_METADATA_SHOW_ON_HOME_PAGE);
-            if ((showOnHomepageFromAddInfo instanceof Boolean && (Boolean) showOnHomepageFromAddInfo || "true".equals(showOnHomepageFromAddInfo))) {
-                clientMetadata.setShowOnHomePage(true);
-            }
+            clientMetadata.setShowOnHomePage(JsonUtils.isTrue(showOnHomepageFromAddInfo));
 
             try {
                 clientMetadata.setAppLaunchUrl(new URL((String) additionalInformation.get(CLIENT_METADATA_APP_LAUNCH_URL)));

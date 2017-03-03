@@ -101,6 +101,10 @@ public class JsonUtils {
         }
     }
 
+    public static boolean isTrue(Object object) {
+        return (object instanceof Boolean && (Boolean) object || "true".equals(object));
+    }
+
     public static JsonNode readTree(JsonParser p) {
         try {
             return objectMapper.readTree(p);

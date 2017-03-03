@@ -317,7 +317,7 @@ public class MultitenantJdbcClientDetailsService implements MultitenantClientDet
                     Object autoApprovedFromAddInfo = additionalInformation.remove(ClientConstants.AUTO_APPROVE);
                     details.setAdditionalInformation(additionalInformation);
                     if (autoApprovedFromAddInfo != null) {
-                        if ((autoApprovedFromAddInfo instanceof Boolean && (Boolean) autoApprovedFromAddInfo || "true".equals(autoApprovedFromAddInfo))) {
+                        if (JsonUtils.isTrue(autoApprovedFromAddInfo)) {
                             autoApproveScopes.add("true");
                         } else if (autoApprovedFromAddInfo instanceof Collection<?>) {
                             @SuppressWarnings("unchecked")
