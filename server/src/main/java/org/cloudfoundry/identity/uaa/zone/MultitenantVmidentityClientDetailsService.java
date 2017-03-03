@@ -26,6 +26,7 @@ import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
+import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -263,7 +264,7 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         Map<String, Object> additionalInformation = details.getAdditionalInformation();
         Object autoApprovedFromAddInfo = additionalInformation.get(ClientConstants.AUTO_APPROVE);
         if (autoApprovedFromAddInfo != null) {
-           if ((autoApprovedFromAddInfo instanceof Boolean && (Boolean) autoApprovedFromAddInfo || "true".equals(autoApprovedFromAddInfo))) {
+           if (JsonUtils.isTrue(autoApprovedFromAddInfo)) {
                autoApproveScopes.add("true");
            } else if (autoApprovedFromAddInfo instanceof Collection<?>) {
                @SuppressWarnings("unchecked")
