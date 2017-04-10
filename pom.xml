@@ -7,6 +7,31 @@
   <version>3.9.3</version>
   <name>UAA Dummy Maven Project</name>
 
+  <profiles>
+    <profile>
+      <id>Windows</id>
+      <activation>
+        <os>
+          <family>Windows</family>
+        </os>
+      </activation>
+      <properties>
+        <gradle.executable>./gradlew.bat</gradle.executable>
+      </properties>
+    </profile>
+    <profile>
+      <id>Linux</id>
+      <activation>
+        <os>
+          <family>Linux</family>
+        </os>
+      </activation>
+      <properties>
+        <gradle.executable>./gradlew</gradle.executable>
+      </properties>
+    </profile>
+  </profiles>
+
   <build>
     <plugins>
       <plugin>
@@ -21,7 +46,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>./gradlew</executable>
+              <executable>${gradle.executable}</executable>
               <arguments>
                 <argument>install</argument>
                 <argument>-x</argument>
@@ -36,7 +61,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>./gradlew</executable>
+              <executable>${gradle.executable}</executable>
               <arguments>
                 <argument>clean</argument>
               </arguments>
@@ -49,7 +74,7 @@
               <goal>exec</goal>
             </goals>
             <configuration>
-              <executable>./gradlew</executable>
+              <executable>${gradle.executable}</executable>
               <arguments>
                 <argument>artifactoryPublish</argument>
               </arguments>
