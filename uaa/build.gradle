@@ -119,3 +119,17 @@ war {
 //    into 'static/docs'
 //  }
 }
+
+task classesJar(type: Jar) {
+  classifier = 'classes'
+  from sourceSets.main.allSource
+}
+
+artifacts {
+  archives classesJar
+}
+
+
+jar {
+  classifier = 'classes'
+}

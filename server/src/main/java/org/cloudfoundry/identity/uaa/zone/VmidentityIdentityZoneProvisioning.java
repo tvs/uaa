@@ -126,11 +126,11 @@ public class VmidentityIdentityZoneProvisioning implements IdentityZoneProvision
         StringWriter privateKeyWriter = new StringWriter();
         StringWriter certificateWriter = new StringWriter();
 
-        try (PEMWriter pemWriter = new PEMWriter(privateKeyWriter, "rsa")) {
+        try (PEMWriter pemWriter = new PEMWriter(privateKeyWriter)) {
             pemWriter.writeObject(privateKey);
         }
 
-        try (PEMWriter pemWriter = new PEMWriter(certificateWriter, "rsa")) {
+        try (PEMWriter pemWriter = new PEMWriter(certificateWriter)) {
             pemWriter.writeObject(certificates.get(0));
         }
 
