@@ -19,17 +19,6 @@
         <gradle.executable>./gradlew.bat</gradle.executable>
       </properties>
     </profile>
-    <profile>
-      <id>Linux</id>
-      <activation>
-        <os>
-          <family>Linux</family>
-        </os>
-      </activation>
-      <properties>
-        <gradle.executable>./gradlew</gradle.executable>
-      </properties>
-    </profile>
   </profiles>
 
   <build>
@@ -84,4 +73,8 @@
       </plugin>
     </plugins>
   </build>
+
+  <properties>
+    <gradle.executable>./gradlew</gradle.executable>
+  </properties>
 </project>
