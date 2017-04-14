@@ -15,39 +15,55 @@
 <beans xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.springframework.org/schema/beans"
     xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-4.0.xsd">
 
+    <!--
     <bean id="jdbcClientDetailsService" class="org.cloudfoundry.identity.uaa.zone.MultitenantJdbcClientDetailsService">
         <constructor-arg ref="dataSource" />
         <property name="passwordEncoder" ref="cachingPasswordEncoder" />
     </bean>
+    -->
 
+    <bean id="vmidentityClientDetailsService" class="org.cloudfoundry.identity.uaa.zone.MultitenantVmidentityClientDetailsService">
+        <constructor-arg ref="idmClient" />
+        <constructor-arg ref="cachingPasswordEncoder" />
+    </bean>
+
+    <!--
     <bean id="clientDetailsService" class="org.cloudfoundry.identity.uaa.client.JdbcQueryableClientDetailsService">
         <constructor-arg name="delegate" ref="jdbcClientDetailsService" />
         <constructor-arg name="jdbcTemplate" ref="jdbcTemplate" />
         <constructor-arg name="pagingListFactory" ref="jdbcPagingListFactory" />
     </bean>
+    -->
+    <bean id="clientDetailsService" class="org.cloudfoundry.identity.uaa.client.VmidentityQueryableClientDetailsService">
+        <constructor-arg ref="vmidentityClientDetailsService" />
+    </bean>
 
+    <!--
     <bean id="jdbcClientMetadataProvisioning" class="org.cloudfoundry.identity.uaa.client.JdbcClientMetadataProvisioning">
         <constructor-arg name="clientDetailsService" ref="jdbcClientDetailsService"/>
         <constructor-arg name="clientRegistrationService" ref="jdbcClientDetailsService"/>
         <constructor-arg name="template" ref="jdbcTemplate" />
-
+    </bean>
+    -->
+    <bean id="vmidentityClientMetadataProvisioning" class="org.cloudfoundry.identity.uaa.client.VmidentityClientMetadataProvisioning">
+        <constructor-arg ref="idmClient" />
     </bean>
 
     <bean id="clientAdminBootstrap" class="org.cloudfoundry.identity.uaa.client.ClientAdminBootstrap">
         <constructor-arg ref="bcryptPasswordEncoder"/>
-        <property name="clientRegistrationService" ref="jdbcClientDetailsService" />
-        <property name="clientMetadataProvisioning" ref="jdbcClientMetadataProvisioning" />
+        <property name="clientRegistrationService" ref="vmidentityClientDetailsService" />
+        <property name="clientMetadataProvisioning" ref="vmidentityClientMetadataProvisioning" />
         <property name="defaultOverride" value="${oauth.client.override:true}" />
         <property name="clients" value="#{@config['oauth']==null ? null : @config['oauth']['clients']}" />
         <property name="autoApproveClients"
             value="#{@applicationProperties.containsKey('oauth.client.autoapprove')?@config['oauth']['client']['autoapprove']:'cf'}" />
     </bean>
 
-    <beans profile="default">
+    <beans> <!-- profile="default"> -->
         <bean class="org.cloudfoundry.identity.uaa.client.ClientAdminBootstrap">
             <constructor-arg ref="bcryptPasswordEncoder"/>
-            <property name="clientRegistrationService" ref="jdbcClientDetailsService" />
-            <property name="clientMetadataProvisioning" ref="jdbcClientMetadataProvisioning" />
+            <property name="clientRegistrationService" ref="vmidentityClientDetailsService" />
+            <property name="clientMetadataProvisioning" ref="vmidentityClientMetadataProvisioning" />
             <property name="clients">
                 <map>
                     <entry key="admin">

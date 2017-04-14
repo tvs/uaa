@@ -18,7 +18,6 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 
-import org.cloudfoundry.identity.uaa.scim.exception.InvalidScimResourceException;
 import org.cloudfoundry.identity.uaa.user.UaaAuthority;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
@@ -54,6 +53,18 @@ public class VmidentityUtils {
     public static String getTenantName(String zoneId, String systemTenant) {
         if (zoneId.equalsIgnoreCase(IdentityZone.getUaa().getId())) {
             zoneId = systemTenant;
+        }
+        return zoneId;
+    }
+
+    public static String getTenantName(CasIdmClient idmClient) throws Exception {
+        String zoneId = IdentityZoneHolder.get().getId();
+        return getTenantName(zoneId, idmClient);
+    }
+
+    public static String getTenantName(String zoneId, CasIdmClient idmClient) throws Exception {
+        if (zoneId.equalsIgnoreCase(IdentityZone.getUaa().getId())) {
+            zoneId = idmClient.getSystemTenant();
         }
         return zoneId;
     }
