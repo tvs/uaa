@@ -23,6 +23,7 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.apache.directory.api.ldap.model.exception.LdapEntryAlreadyExistsException;
 import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
@@ -40,7 +41,6 @@ import org.springframework.util.Assert;
 
 import com.google.common.primitives.Ints;
 import com.vmware.identity.idm.DuplicatedOIDCClientException;
-import com.vmware.identity.idm.DuplicatedOIDCRedirectURLException;
 import com.vmware.identity.idm.NoSuchOIDCClientException;
 import com.vmware.identity.idm.OIDCClient;
 import com.vmware.identity.idm.client.CasIdmClient;
@@ -71,7 +71,7 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         } catch (DuplicatedOIDCClientException e) {
             logger.error("Client with ID already exists: " + clientDetails.getClientId(), e);
             throw new ClientAlreadyExistsException("Client already exists: " + clientDetails.getClientId());
-        } catch (DuplicatedOIDCRedirectURLException e) {
+        } catch (LdapEntryAlreadyExistsException e) {
             logger.error("Client with registered redirect already exists: " + clientDetails.getRegisteredRedirectUri(), e);
             throw new ClientAlreadyExistsException("Client with registered redirect already exists: " + clientDetails.getRegisteredRedirectUri());
         } catch (Exception e) {
