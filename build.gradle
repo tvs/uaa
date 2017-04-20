@@ -5,7 +5,6 @@ buildscript {
   apply from: file('shared_versions.gradle')
 
   repositories {
-    mavenLocal()
     mavenCentral()
     jcenter()
     maven {
@@ -14,6 +13,7 @@ buildscript {
     maven {
       url 'https://plugins.gradle.org/m2/'
     }
+    mavenLocal()
   }
 
   dependencies {
@@ -149,13 +149,13 @@ subprojects {
     archives javadocJar
   }
   repositories {
-    mavenLocal()
     maven { url "http://maven.springframework.org/release" }
     maven { url "http://maven.springframework.org/milestone" }
     maven { url "http://maven.springframework.org/snapshot" }
     maven { url "http://objectstyle.org/maven2/" }
     maven { url "http://repo.springsource.org/ext-release-local" }
     maven { url "http://repo.maven.apache.org/maven2" }
+    mavenLocal()
   }
 
   install {
