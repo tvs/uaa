@@ -11,22 +11,23 @@
  *     subcomponent's license, as noted in the LICENSE file.
  *******************************************************************************/package org.cloudfoundry.identity.uaa.login;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.URLEncoder;
+
+import javax.servlet.ServletException;
+import javax.servlet.http.Cookie;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+
 import org.cloudfoundry.identity.uaa.authentication.UaaPrincipal;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
 import org.springframework.security.web.authentication.SavedRequestAwareAuthenticationSuccessHandler;
-
-import javax.servlet.ServletException;
-import javax.servlet.http.Cookie;
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.net.URLEncoder;
-
-import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class AccountSavingAuthenticationSuccessHandler implements AuthenticationSuccessHandler {
 
@@ -60,7 +61,12 @@ public class AccountSavingAuthenticationSuccessHandler implements Authentication
         savedAccountOption.setOrigin(uaaPrincipal.getOrigin());
         savedAccountOption.setUserId(uaaPrincipal.getId());
         savedAccountOption.setUsername(uaaPrincipal.getName());
-        Cookie savedAccountCookie = new Cookie("Saved-Account-" + uaaPrincipal.getId(), JsonUtils.writeValueAsString(savedAccountOption));
+        Cookie savedAccountCookie;
+        try {
+            savedAccountCookie = new Cookie("Saved-Account-" + sanitizeId(uaaPrincipal.getId()), URLEncoder.encode(JsonUtils.writeValueAsString(savedAccountOption), UTF_8.name()));
+        } catch (UnsupportedEncodingException e) {
+            throw new IllegalArgumentException(e);
+        }
 
         savedAccountCookie.setPath(request.getContextPath() + "/login");
         savedAccountCookie.setHttpOnly(true);
@@ -83,5 +89,9 @@ public class AccountSavingAuthenticationSuccessHandler implements Authentication
         currentUserCookie.setPath(request.getContextPath());
 
         response.addCookie(currentUserCookie);
+    }
+
+    private static String sanitizeId(String id) {
+        return id.replace("@", "-AT-");
     }
 }
