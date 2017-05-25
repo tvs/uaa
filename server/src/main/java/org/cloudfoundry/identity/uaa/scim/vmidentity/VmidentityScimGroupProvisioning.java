@@ -10,20 +10,20 @@
  *     subcomponents is subject to the terms and conditions of the
  *     subcomponent's license, as noted in the LICENSE file.
  *******************************************************************************/
-package org.cloudfoundry.identity.uaa.scim.jdbc;
+package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.cloudfoundry.identity.uaa.audit.event.SystemDeletable;
+import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.scim.ScimGroup;
-import org.cloudfoundry.identity.uaa.scim.ScimGroupExternalMember;
-import org.cloudfoundry.identity.uaa.scim.ScimGroupExternalMembershipManager;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupProvisioning;
 import org.cloudfoundry.identity.uaa.scim.ScimMeta;
 import org.cloudfoundry.identity.uaa.scim.exception.InvalidScimResourceException;
-import org.cloudfoundry.identity.uaa.scim.exception.MemberAlreadyExistsException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimResourceNotFoundException;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
@@ -33,29 +33,28 @@ import com.vmware.identity.idm.InvalidPrincipalException;
 import com.vmware.identity.idm.PrincipalId;
 import com.vmware.identity.idm.client.CasIdmClient;
 
-public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, ScimGroupExternalMembershipManager {
+public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, SystemDeletable {
 
-    private final CasIdmClient _idmClient;
+    private final CasIdmClient idmClient;
     private final Log logger = LogFactory.getLog(VmidentityScimGroupProvisioning.class);
 
     public VmidentityScimGroupProvisioning(CasIdmClient casIdmClient) {
-        this._idmClient = casIdmClient;
+        this.idmClient = casIdmClient;
     }
 
     @Override
     public List<ScimGroup> retrieveAll() {
-        logger.debug("retrieveAll - not supported");
-        throw new UnsupportedOperationException();
+        return query("id pr");
     }
 
     @Override
     public ScimGroup retrieve(String id) {
         try {
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
+            String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             String[] parts = id.split("@");
             PrincipalId groupId = new PrincipalId(parts[0], parts[1]);
-            Group group = this._idmClient.findGroup(tenant, groupId);
+            Group group = this.idmClient.findGroup(tenant, groupId);
 
             if (group == null) {
                 throw new InvalidPrincipalException("Group not found.", id);
@@ -72,16 +71,14 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
     public ScimGroup create(ScimGroup resource) {
         try {
             logger.debug("creating group dislay name='" + resource.getDisplayName() + "', id='" + resource.getId() + "'.");
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
+            String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             String name = resource.getDisplayName();
             String[] parts = name.split("@");
             if (parts.length > 2) {
-                logger.error("Invalid group name: " + name);
                 throw new InvalidScimResourceException(String.format("Invalid format for group name '%s'", name));
             } else if (parts.length == 2) {
                 if (systemDomain.equalsIgnoreCase(parts[1]) == false) {
-                    logger.error("Cannot create groups in non-system domain. " + name);
                     throw new InvalidScimResourceException("Cannot create groups in external domains.");
                 }
 
@@ -90,8 +87,8 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
 
             GroupDetail gd = new GroupDetail();
             gd.setDescription(resource.getDescription());
-            PrincipalId groupId = this._idmClient.addGroup(tenant, name, gd);
-            Group group = this._idmClient.findGroup(tenant, groupId);
+            PrincipalId groupId = this.idmClient.addGroup(tenant, name, gd);
+            Group group = this.idmClient.findGroup(tenant, groupId);
 
             if (group == null) {
                 throw new InvalidPrincipalException("Group not found.", groupId.toString());
@@ -115,17 +112,17 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
     @Override
     public ScimGroup delete(String id, int version) {
         try {
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
+            String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             String[] parts = id.split("@");
             PrincipalId groupId = new PrincipalId(parts[0], parts[1]);
-            Group group = this._idmClient.findGroup(tenant, groupId);
+            Group group = this.idmClient.findGroup(tenant, groupId);
 
             if (group == null) {
                 throw new InvalidPrincipalException("Group not found.", id);
             }
             ScimGroup sg = getScimGroup(group, tenant, systemDomain);
-            this._idmClient.deletePrincipal(tenant, groupId.getName());
+            this.idmClient.deletePrincipal(tenant, groupId.getName());
             return sg;
         } catch (InvalidPrincipalException ex) {
             logger.error("delete group failed...", ex);
@@ -139,62 +136,46 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
 
     @Override
     public List<ScimGroup> query(String filter) {
-        // "displayName eq \"abc\"""
-        logger.debug("group flter: " + filter);
-        return new ArrayList<ScimGroup>();
+        logger.debug("Querying groups with filter: " + filter);
+
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant,  this.idmClient);
+
+            Set<Group> groups = idmClient.findGroupsByScimFilter(tenant, filter);
+            ArrayList<ScimGroup> scimGroups = new ArrayList<ScimGroup>(groups.size());
+            for (Group group : groups) {
+                scimGroups.add(getScimGroup(group, tenant, systemDomain));
+            }
+
+            return scimGroups;
+        } catch (Exception e) {
+            logger.error("Unable to query groups by filter '" + filter + "'", e);
+            throw new VmidentityDataAccessException("Unable to query users by filter: " + filter);
+        }
     }
 
     @Override
     public List<ScimGroup> query(String filter, String sortBy, boolean ascending) {
-        logger.debug("group flter: " + filter);
-        return new ArrayList<ScimGroup>();
+        // todo: sort by ascending
+        return this.query(filter);
     }
 
     @Override
     public int delete(String filter) {
-        throw new UnsupportedOperationException();
-    }
+        logger.debug("Filtering groups with query: " + filter);
 
-    @Override
-    public ScimGroupExternalMember mapExternalGroup(String groupId, String externalGroup, String origin)
-            throws ScimResourceNotFoundException, MemberAlreadyExistsException {
-        // TODO proper impl
-        ScimGroupExternalMember mem = new ScimGroupExternalMember(groupId, externalGroup);
-        mem.setOrigin(origin);
-        return mem;
-    }
-
-    @Override
-    public ScimGroupExternalMember unmapExternalGroup(String groupId, String externalGroup, String origin)
-            throws ScimResourceNotFoundException {
-        // TODO proper impl
-        ScimGroupExternalMember mem = new ScimGroupExternalMember(groupId, externalGroup);
-        mem.setOrigin(origin);
-        return mem;
-    }
-
-    @Override
-    public List<ScimGroupExternalMember> getExternalGroupMapsByGroupId(String groupId, String origin)
-            throws ScimResourceNotFoundException {
-        // TODO Auto-generated method stub
-        return new ArrayList<ScimGroupExternalMember>();
-    }
-
-    @Override
-    public List<ScimGroupExternalMember> getExternalGroupMapsByExternalGroup(String externalGroup, String origin)
-            throws ScimResourceNotFoundException {
-        return new ArrayList<ScimGroupExternalMember>();
-    }
-
-    @Override
-    public List<ScimGroupExternalMember> getExternalGroupMapsByGroupName(String groupName, String origin)
-            throws ScimResourceNotFoundException {
-        return this.getExternalGroupMapsByGroupId(groupName, origin);
-    }
-
-    @Override
-    public void unmapAll(String groupId) throws ScimResourceNotFoundException {
-        // TODO Auto-generated method stub
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            Set<Group> groups = idmClient.findGroupsByScimFilter(tenant, filter);
+            for (Group group : groups) {
+                idmClient.deletePrincipal(tenant, group.getId().getUPN());
+            }
+            return groups.size();
+        } catch (Exception e) {
+            logger.error("Unable to delete groups by filter '" + filter + "'", e);
+            throw new VmidentityDataAccessException("Unable to delete groups by filter: " + filter);
+        }
     }
 
     static ScimGroup getScimGroup(Group idmGroup, String tenant, String systemDomain) {
@@ -205,5 +186,22 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
         meta.setVersion(1);
         group.setMeta(meta);
         return group;
+    }
+
+    @Override
+    public int deleteByIdentityZone(String zoneId) {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    @Override
+    public int deleteByOrigin(String origin, String zoneId) {
+        // TODO Auto-generated method stub
+        return 0;
+    }
+
+    @Override
+    public Log getLogger() {
+        return logger;
     }
 }

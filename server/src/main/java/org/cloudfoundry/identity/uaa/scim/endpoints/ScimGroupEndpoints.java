@@ -22,6 +22,7 @@ import org.cloudfoundry.identity.uaa.resources.SimpleAttributeNameMapper;
 import org.cloudfoundry.identity.uaa.scim.ScimCore;
 import org.cloudfoundry.identity.uaa.scim.ScimGroup;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupExternalMember;
+import org.cloudfoundry.identity.uaa.scim.ScimGroupExternalMembershipManager;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupMember;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupMembershipManager;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupProvisioning;
@@ -77,7 +78,7 @@ public class ScimGroupEndpoints {
 
     private ScimGroupMembershipManager membershipManager;
 
-    private JdbcScimGroupExternalMembershipManager externalMembershipManager;
+    private ScimGroupExternalMembershipManager externalMembershipManager;
 
     private Map<Class<? extends Exception>, HttpStatus> statuses = new HashMap<>();
 
@@ -100,11 +101,11 @@ public class ScimGroupEndpoints {
         this.messageConverters = messageConverters;
     }
 
-    public JdbcScimGroupExternalMembershipManager getExternalMembershipManager() {
+    public ScimGroupExternalMembershipManager getExternalMembershipManager() {
         return externalMembershipManager;
     }
 
-    public void setExternalMembershipManager(JdbcScimGroupExternalMembershipManager externalMembershipManager) {
+    public void setExternalMembershipManager(ScimGroupExternalMembershipManager externalMembershipManager) {
         this.externalMembershipManager = externalMembershipManager;
     }
 

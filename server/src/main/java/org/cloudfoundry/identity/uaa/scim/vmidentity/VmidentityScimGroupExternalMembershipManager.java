@@ -10,7 +10,7 @@
  *     subcomponents is subject to the terms and conditions of the
  *     subcomponent's license, as noted in the LICENSE file.
  *******************************************************************************/
-package org.cloudfoundry.identity.uaa.scim.jdbc;
+package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,10 +24,10 @@ import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityScimGroupExternalMembershipManager implements ScimGroupExternalMembershipManager {
 
-    private final CasIdmClient _idmClient;
+    private final CasIdmClient idmClient;
 
-    public VmidentityScimGroupExternalMembershipManager(CasIdmClient casIdmClient) {
-        this._idmClient = casIdmClient;
+    public VmidentityScimGroupExternalMembershipManager(CasIdmClient idmClient) {
+        this.idmClient = idmClient;
     }
 
     @Override
@@ -70,6 +70,24 @@ public class VmidentityScimGroupExternalMembershipManager implements ScimGroupEx
     public void unmapAll(String groupId) throws ScimResourceNotFoundException {
         // TODO Auto-generated method stub
 
+    }
+
+    @Override
+    public List<ScimGroupExternalMember> query(String filter) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public List<ScimGroupExternalMember> query(String filter, String sortBy, boolean ascending) {
+        // TODO Auto-generated method stub
+        return null;
+    }
+
+    @Override
+    public int delete(String filter) {
+        // TODO Auto-generated method stub
+        return 0;
     }
 
 }
