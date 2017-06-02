@@ -13,6 +13,7 @@
 package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 
@@ -25,6 +26,7 @@ import org.cloudfoundry.identity.uaa.scim.ScimGroupProvisioning;
 import org.cloudfoundry.identity.uaa.scim.ScimMeta;
 import org.cloudfoundry.identity.uaa.scim.exception.InvalidScimResourceException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimResourceNotFoundException;
+import org.cloudfoundry.identity.uaa.util.Validate;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
 import com.vmware.identity.idm.Group;
@@ -34,6 +36,8 @@ import com.vmware.identity.idm.PrincipalId;
 import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, SystemDeletable {
+
+    public static final String GROUP_FIELDS = "id,displayName,description,created,lastModified,version,identity_zone_id";
 
     private final CasIdmClient idmClient;
     private final Log logger = LogFactory.getLog(VmidentityScimGroupProvisioning.class);
@@ -157,8 +161,13 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
 
     @Override
     public List<ScimGroup> query(String filter, String sortBy, boolean ascending) {
-        // todo: sort by ascending
-        return this.query(filter);
+        List<ScimGroup> groups = this.query(filter);
+
+        if (sortBy != null) {
+            sortScimGroups(groups, sortBy, ascending);
+        }
+
+        return groups;
     }
 
     @Override
@@ -203,5 +212,41 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
     @Override
     public Log getLogger() {
         return logger;
+    }
+
+    private void sortScimGroups(List<ScimGroup> list, String sortBy, boolean ascending) {
+        validateOrderBy(sortBy);
+        switch (sortBy.toLowerCase()) {
+            case "id":
+                Collections.sort(list, (a, b) -> a.getId().compareTo(b.getId()));
+                break;
+            case "displayname":
+                Collections.sort(list, (a, b) -> a.getDisplayName().compareTo(b.getDisplayName()));
+                break;
+            case "description":
+                Collections.sort(list, (a, b) -> a.getDescription().compareTo(b.getDescription()));
+                break;
+            case "created":
+                Collections.sort(list, (a, b) -> a.getMeta().getCreated().compareTo(b.getMeta().getCreated()));
+                break;
+            case "lastmodified":
+                Collections.sort(list, (a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getCreated()));
+                break;
+            case "version":
+                Collections.sort(list, (a, b) -> Integer.compare(a.getVersion(), b.getVersion()));
+                break;
+            case "identity_zone_id":
+                Collections.sort(list, (a, b) -> a.getZoneId().compareTo(b.getZoneId()));
+                break;
+        }
+
+        if (!ascending) {
+            Collections.reverse(list);
+        }
+    }
+
+    private void validateOrderBy(String orderBy) throws IllegalArgumentException {
+        Validate.validateOrderBy(orderBy.toLowerCase(), GROUP_FIELDS.toLowerCase());
+
     }
 }

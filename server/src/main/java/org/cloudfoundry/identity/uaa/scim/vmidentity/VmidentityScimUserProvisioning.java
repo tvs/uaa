@@ -13,6 +13,7 @@
 package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -29,6 +30,7 @@ import org.cloudfoundry.identity.uaa.scim.ScimUserProvisioning;
 import org.cloudfoundry.identity.uaa.scim.exception.InvalidPasswordException;
 import org.cloudfoundry.identity.uaa.scim.exception.InvalidScimResourceException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimResourceNotFoundException;
+import org.cloudfoundry.identity.uaa.util.Validate;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
 import com.vmware.identity.idm.InvalidPrincipalException;
@@ -37,8 +39,12 @@ import com.vmware.identity.idm.PersonUser;
 import com.vmware.identity.idm.PrincipalId;
 import com.vmware.identity.idm.client.CasIdmClient;
 
+import static org.cloudfoundry.identity.uaa.util.CompareUtils.compareToList;
+
 
 public class VmidentityScimUserProvisioning implements ScimUserProvisioning, ResourceMonitor<ScimUser> {
+
+    public static final String USER_FIELDS = "id,version,created,lastModified,username,email,givenName,familyName,active,phoneNumber,verified,origin,external_id,identity_zone_id,salt,passwd_lastmodified ";
 
     private final Log logger = LogFactory.getLog(VmidentityScimUserProvisioning.class);
     private final CasIdmClient idmClient;
@@ -125,8 +131,12 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
 
     @Override
     public List<ScimUser> query(String filter, String sortBy, boolean ascending) {
-        // todo: sort by, ascending
-        return this.query(filter);
+        List<ScimUser> users = query(filter);
+
+        if (sortBy != null) {
+            sortScimUsers(users, sortBy, ascending);
+        }
+        return users;
     }
 
     @Override
@@ -229,6 +239,68 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         // user.setSalt(salt);
         user.setPasswordLastModified(new Date(personUser.getDetail().getPwdLastSet()));
         return user;
+    }
+
+    private void sortScimUsers(List<ScimUser> list, String sortBy, boolean ascending) {
+        validateOrderBy(sortBy);
+        switch (sortBy.toLowerCase()) {
+            case "id":
+                Collections.sort(list, (a, b) -> a.getId().compareTo(b.getId()));
+                break;
+            case "version":
+                Collections.sort(list, (a, b) -> Integer.compare(a.getVersion(), b.getVersion()));
+                break;
+            case "created":
+                Collections.sort(list, (a, b) -> a.getMeta().getCreated().compareTo(b.getMeta().getCreated()));
+                break;
+            case "lastmodified":
+                Collections.sort(list, (a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getLastModified()));
+                break;
+            case "username":
+                Collections.sort(list, (a, b) -> a.getUserName().compareTo(b.getUserName()));
+                break;
+            case "email":
+                Collections.sort(list, (a, b) -> compareToList(a.getEmails(), b.getEmails()));
+                break;
+            case "givenname":
+                Collections.sort(list, (a, b) -> a.getGivenName().compareTo(b.getGivenName()));
+                break;
+            case "familyname":
+                Collections.sort(list, (a, b) -> a.getFamilyName().compareTo(b.getFamilyName()));
+                break;
+            case "active":
+                Collections.sort(list, (a, b) -> Boolean.compare(a.isActive(), b.isActive()));
+                break;
+            case "phonenumber":
+                Collections.sort(list, (a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
+                break;
+            case "verified":
+                Collections.sort(list, (a, b) -> Boolean.compare(a.isVerified(), b.isVerified()));
+                break;
+            case "origin":
+                Collections.sort(list, (a, b) -> a.getOrigin().compareTo(b.getOrigin()));
+                break;
+            case "external_id":
+                Collections.sort(list, (a, b) -> a.getExternalId().compareTo(b.getExternalId()));
+                break;
+            case "identity_zone_id":
+                Collections.sort(list, (a, b) -> a.getZoneId().compareTo(b.getZoneId()));
+                break;
+            case "salt":
+                Collections.sort(list, (a, b) -> a.getSalt().compareTo(b.getSalt()));
+                break;
+            case "passwd_lastmodified":
+                Collections.sort(list, (a, b) -> a.getPasswordLastModified().compareTo(b.getPasswordLastModified()));
+                break;
+        }
+
+        if (!ascending) {
+            Collections.reverse(list);
+        }
+    }
+
+    private void validateOrderBy(String orderBy) throws IllegalArgumentException {
+        Validate.validateOrderBy(orderBy.toLowerCase(), USER_FIELDS.toLowerCase());
     }
 
 }

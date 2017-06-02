@@ -34,8 +34,7 @@ public class VmidentityQueryableClientDetailsService implements Queryable<Client
 
     @Override
     public List<ClientDetails> query(String filter, String sortBy, boolean ascending) {
-        logger.debug("query filtering not yet implemented");
-        return delegate.listClientDetails();
+        return delegate.query(filter, sortBy, ascending);
     }
 
     @Override

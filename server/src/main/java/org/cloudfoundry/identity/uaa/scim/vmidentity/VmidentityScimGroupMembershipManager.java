@@ -42,6 +42,8 @@ import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityScimGroupMembershipManager implements ScimGroupMembershipManager {
 
+    public static final String MEMBERSHIP_FIELDS = "group_id,member_id,member_type,authorities,added,origin";
+
     private final Log logger = LogFactory.getLog(VmidentityScimGroupMembershipManager.class);
     private final CasIdmClient idmClient;
 
