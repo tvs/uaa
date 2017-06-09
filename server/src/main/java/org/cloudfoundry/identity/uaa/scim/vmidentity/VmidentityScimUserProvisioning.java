@@ -233,7 +233,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         user.setName(name);
         user.setActive((!personUser.isDisabled()) && (!personUser.isLocked()));
         user.setVerified(true);
-        user.setOrigin((systemDomain.equalsIgnoreCase(personUser.getId().getDomain())) ? OriginKeys.UAA : OriginKeys.LDAP);
+        user.setOrigin((systemDomain.equalsIgnoreCase(personUser.getId().getDomain())) ? OriginKeys.UAA : personUser.getId().getDomain());
         // user.setExternalId(externalId);
         user.setZoneId(tenant);
         // user.setSalt(salt);

@@ -20,6 +20,7 @@ import java.util.List;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 
@@ -32,28 +33,27 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
 
     private final Log logger = LogFactory.getLog(VmidentityIdentityProviderProvisioning.class);
 
-    private final CasIdmClient _idmClient;
+    private final CasIdmClient client;
 
-    public VmidentityIdentityProviderProvisioning(CasIdmClient idmClient) {
-        this._idmClient = idmClient;
+    public VmidentityIdentityProviderProvisioning(CasIdmClient client) {
+        this.client = client;
     }
 
     @Override
     public IdentityProvider create(IdentityProvider identityProvider) {
-        throw new IllegalStateException("creating a provider is not yet supported.");
+        throw new UnsupportedOperationException("Creating a provider is not yet supported.");
     }
 
     @Override
     public IdentityProvider update(IdentityProvider identityProvider) {
-        // no op; //todo
-        return this.retrieve(identityProvider.getId());
+        throw new UnsupportedOperationException("Updating a provider is not yet supported.");
     }
 
     @Override
     public IdentityProvider retrieve(String id) {
         try {
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            Collection<IIdentityStoreData> providers = this._idmClient.getProviders(
+            String tenant = VmidentityUtils.getTenantName(this.client.getSystemTenant());
+            Collection<IIdentityStoreData> providers = this.client.getProviders(
                     tenant, EnumSet.of(DomainType.SYSTEM_DOMAIN, DomainType.EXTERNAL_DOMAIN));
 
             if ((providers != null) && (providers.iterator() != null)) {
@@ -67,7 +67,7 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
             }
             return null;
         } catch (Exception ex) {
-            throw new IllegalStateException(String.format("Failed to retrieve provider Id '%s'.", id), ex);
+            throw new VmidentityDataAccessException("Failed to retrieve provider with id '" + id + "'", ex);
         }
     }
 
@@ -80,8 +80,8 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
     public List<IdentityProvider> retrieveAll(boolean activeOnly, String zoneId) {
         try {
             // TODO: active only - we only have active right now...
-            String tenant = VmidentityUtils.getTenantName(zoneId, this._idmClient.getSystemTenant());
-            Collection<IIdentityStoreData> providers = this._idmClient.getProviders(
+            String tenant = VmidentityUtils.getTenantName(zoneId, this.client.getSystemTenant());
+            Collection<IIdentityStoreData> providers = this.client.getProviders(
                     tenant, EnumSet.of(DomainType.SYSTEM_DOMAIN, DomainType.EXTERNAL_DOMAIN));
 
             List<IdentityProvider> result = new ArrayList<IdentityProvider>();
@@ -93,45 +93,42 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
             }
             return result;
         } catch (Exception ex) {
-            throw new IllegalStateException(String.format("Failed to retrieve provider zoneId '%s', activeOnly ''.",
-                    zoneId, (activeOnly ? "true" : "false")), ex);
+            throw new VmidentityDataAccessException(String.format("Failed to retrieve providers for zone '%s', activeOnly '%b'",
+                    zoneId, activeOnly), ex);
         }
     }
 
     @Override
     public IdentityProvider retrieveByOrigin(String origin, String zoneId) {
         try {
-            String tenant = VmidentityUtils.getTenantName(zoneId, this._idmClient.getSystemTenant());
+            String tenant = VmidentityUtils.getTenantName(zoneId, this.client.getSystemTenant());
+            IIdentityStoreData provider = null;
+
             if (OriginKeys.UAA.equalsIgnoreCase(origin)) {
                 // retrieve system domain provider
+                Collection<IIdentityStoreData> providers = this.client.getProviders(tenant, EnumSet.of(DomainType.SYSTEM_DOMAIN));
 
-                Collection<IIdentityStoreData> provider = this._idmClient.getProviders(
-                        tenant, EnumSet.of(DomainType.SYSTEM_DOMAIN));
                 // todo: should get security domain name, not provider name.
                 // Collection<SecurityDomain> domains = client.getSecurityDomains(tenant,
                 // provider.iterator().next().getName());
 
-                if ((provider == null) || (provider.iterator() == null) || (provider.iterator().hasNext() == false)) {
+                if ((providers == null) || (providers.iterator() == null) || (providers.iterator().hasNext() == false)) {
                     throw new IllegalStateException("System domain must exist.");
                 }
 
-                return getIdentityProviderForStore(provider.iterator().next(), tenant);
-            } else if (OriginKeys.LDAP.equalsIgnoreCase(origin)) {
-                Collection<IIdentityStoreData> provider = this._idmClient.getProviders(
-                        tenant, EnumSet.of(DomainType.EXTERNAL_DOMAIN));
-
-                // TODO: how do we mimic multiple IDSs ?
-                if ((provider != null) && (provider.iterator() != null) && (provider.iterator().hasNext() == true)) {
-                    return getIdentityProviderForStore(provider.iterator().next(), tenant);
-                } else {
-                    return null;
-                }
+                provider = providers.iterator().next();
             } else {
-                throw new IllegalStateException(String.format("Unsupported origin", origin));
+                provider = this.client.getProvider(tenant, origin);
+                return getIdentityProviderForStore(provider, tenant);
+            }
+
+            if (provider != null) {
+                return getIdentityProviderForStore(provider, tenant);
+            } else {
+                return null;
             }
         } catch (Exception ex) {
-            throw new IllegalStateException(
-                    String.format("Failed to retrieve provider origin '%s' zoneId '%s'.", origin, zoneId), ex);
+            throw new VmidentityDataAccessException("Failed to retrieve provider with origin '" + origin + "' and zone '" + zoneId +"'", ex);
         }
     }
 
@@ -144,12 +141,13 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
         // identityProvider.setLastModified(rs.getTimestamp(pos++));
         identityProvider.setName(data.getName());
         identityProvider.setOriginKey(
-                ((data.getDomainType() == DomainType.SYSTEM_DOMAIN) ? OriginKeys.UAA : OriginKeys.LDAP));
+                ((data.getDomainType() == DomainType.SYSTEM_DOMAIN) ? OriginKeys.UAA : data.getName()));
         identityProvider.setType(
                 ((data.getDomainType() == DomainType.SYSTEM_DOMAIN) ? OriginKeys.UAA : OriginKeys.LDAP));
+
         if ((data.getDomainType() == DomainType.SYSTEM_DOMAIN)) {
-            com.vmware.identity.idm.LockoutPolicy idmLP = this._idmClient.getLockoutPolicy(tenant);
-            com.vmware.identity.idm.PasswordPolicy idmPP = this._idmClient.getPasswordPolicy(tenant);
+            com.vmware.identity.idm.LockoutPolicy idmLP = this.client.getLockoutPolicy(tenant);
+            com.vmware.identity.idm.PasswordPolicy idmPP = this.client.getPasswordPolicy(tenant);
 
             PasswordPolicy pp = new PasswordPolicy(
                     idmPP.getMinimumLength(),
@@ -165,6 +163,7 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
                     (int) idmLP.getAutoUnlockIntervalSec());
 
             UaaIdentityProviderDefinition config = new UaaIdentityProviderDefinition(pp, lp, false);
+
             identityProvider.setConfig(config);
         } else if ((data.getDomainType() == DomainType.EXTERNAL_DOMAIN)) {
             IIdentityStoreDataEx dataEx = data.getExtendedIdentityStoreData();
@@ -193,8 +192,10 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
             throw new IllegalStateException(
                     String.format("Unexpected domain type '%s'.", data.getDomainType().toString()));
         }
+
         identityProvider.setIdentityZoneId(tenant);
         identityProvider.setActive(true);
+
         return identityProvider;
     }
 }
