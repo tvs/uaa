@@ -96,7 +96,7 @@ public class VmidentityUserDatabase implements UaaUserDatabase {
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
 
             String[] parts = id.split("@");
-            String origin = (systemDomain.equalsIgnoreCase(parts[1])) ? OriginKeys.UAA : OriginKeys.LDAP;
+            String origin = (systemDomain.equalsIgnoreCase(parts[1])) ? OriginKeys.UAA : parts[1];
 
             return this.retrieveUserByName(id, origin);
         } catch (UsernameNotFoundException ex) {

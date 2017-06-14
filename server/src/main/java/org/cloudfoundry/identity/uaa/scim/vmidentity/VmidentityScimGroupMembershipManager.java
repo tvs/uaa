@@ -146,21 +146,21 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
                 if (groups != null) {
                     for (Group g : groups) {
                         members.add(createGroupMembership(g.getId().getUPN(), ScimGroupMember.Type.GROUP,
-                                groupInSystemDomain));
+                                groupInSystemDomain, g.getDomain()));
                     }
                 }
 
                 if (users != null) {
                     for (PersonUser user : users) {
                         members.add(createGroupMembership(user.getId().getUPN(), ScimGroupMember.Type.USER,
-                                groupInSystemDomain));
+                                groupInSystemDomain, user.getId().getDomain()));
                     }
                 }
 
                 if (solutionUsers != null) {
                     for (SolutionUser user : solutionUsers) {
                         members.add(createGroupMembership(user.getId().getUPN(), ScimGroupMember.Type.USER,
-                                groupInSystemDomain));
+                                groupInSystemDomain, user.getId().getDomain()));
                     }
                 }
             }
@@ -272,7 +272,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             }
 
             if (this.idmClient.removeFromLocalGroup(tenant, id, group.getName())) {
-                gm = createGroupMembership(memberId, type, true);
+                gm = createGroupMembership(memberId, type, true, group.getDomain());
             }
             return gm;
         } catch (InvalidPrincipalException ex) {
@@ -346,9 +346,9 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
     }
 
     private static ScimGroupMember createGroupMembership(String memberId, ScimGroupMember.Type memberType,
-            boolean groupFromSystemDomain) {
+            boolean groupFromSystemDomain, String domain) {
         ScimGroupMember sgm = new ScimGroupMember(memberId, memberType, ScimGroupMember.GROUP_MEMBER);
-        sgm.setOrigin(groupFromSystemDomain ? OriginKeys.UAA : OriginKeys.LDAP);
+        sgm.setOrigin(groupFromSystemDomain ? OriginKeys.UAA : domain);
         return sgm;
     }
 }

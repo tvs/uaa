@@ -112,20 +112,17 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
 
         List<GrantedAuthority> authorities = null;
 
-        try
-        {
+        try {
             authorities = VmidentityUtils.getUserAuthorities(this._idmClient, userId, tenant, systemDomain);
-            if (logger.isDebugEnabled())
-            {
+            if (logger.isDebugEnabled()) {
                 logger.debug(String.format("Authorities for user '%s':", userId.getUPN()));
-                for( GrantedAuthority ga : authorities )
-                {
+                if (logger.isDebugEnabled()) {
+                    for( GrantedAuthority ga : authorities ) {
                     logger.debug(ga.getAuthority());
+                    }
                 }
             }
-        }
-        catch (Exception ex)
-        {
+        } catch (Exception ex) {
             logger.warn("Auth failed for user '" + req.getName() + "'.", ex);
             AuthenticationServiceException e = new AuthenticationServiceException(ex.getMessage());
             publish(new AuthenticationFailureServiceExceptionEvent(req, e));
@@ -137,7 +134,7 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
                         upn,
                         upn,
                         upn,
-                        userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : OriginKeys.LDAP,
+                        userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : userId.getDomain(),
                         null, // external id
                         tenant),
                 authorities,
@@ -151,7 +148,7 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
                .withZoneId(tenant)
                .withUsername(upn)
                .withOrigin(
-                   userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : OriginKeys.LDAP
+                   userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : userId.getDomain()
                )
                .withEmail(upn) // email is required; now idm it is optional //
                .withAuthorities(authorities);
