@@ -46,7 +46,8 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
 
     @Override
     public IdentityProvider update(IdentityProvider identityProvider) {
-        throw new UnsupportedOperationException("Updating a provider is not yet supported.");
+        logger.warn("Updating a provider is not yet supported.");
+        return this.retrieve(identityProvider.getId());
     }
 
     @Override
@@ -119,7 +120,6 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
                 provider = providers.iterator().next();
             } else {
                 provider = this.client.getProvider(tenant, origin);
-                return getIdentityProviderForStore(provider, tenant);
             }
 
             if (provider != null) {
