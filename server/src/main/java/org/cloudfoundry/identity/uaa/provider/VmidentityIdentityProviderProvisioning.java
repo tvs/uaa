@@ -119,7 +119,7 @@ public class VmidentityIdentityProviderProvisioning implements IdentityProviderP
 
                 provider = providers.iterator().next();
             } else {
-                provider = this.client.getProvider(tenant, origin);
+                provider = this.client.getProviderByDomain(tenant, origin);
             }
 
             if (provider != null) {
