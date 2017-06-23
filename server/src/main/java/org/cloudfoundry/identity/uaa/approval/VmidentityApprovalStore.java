@@ -13,11 +13,17 @@
 package org.cloudfoundry.identity.uaa.approval;
 
 import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Collection;
+import java.util.Date;
 import java.util.List;
 
+import com.vmware.identity.idm.client.CasIdmClient;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.audit.event.ApprovalModifiedEvent;
+import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
+import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.context.ApplicationEvent;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationEventPublisherAware;
@@ -25,126 +31,122 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 
 public class VmidentityApprovalStore implements ApprovalStore, ApplicationEventPublisherAware {
-
-    // in memory for now
-    private List<Approval> _approvals;
-
     private final Log logger = LogFactory.getLog(VmidentityApprovalStore.class);
 
-    // USER_APPROVALS_FILTER_TEMPLATE = "user_id eq \"%s\""
-    // USER_FILTER_TEMPLATE = "user_id eq \"%s\"";
-    // USER_AND_CLIENT_FILTER_TEMPLATE = "user_id eq \"%s\" and client_id eq \"%s\"";
+    private ApplicationEventPublisher applicationEventPublisher;
+    private CasIdmClient client;
+    private boolean handleRevocationsAsExpiry = false;
 
-    private final Object _lock;
+    public VmidentityApprovalStore(CasIdmClient client) {
+        this.client = client;
+    }
 
-    private ApplicationEventPublisher _applicationEventPublisher;
-
-    public VmidentityApprovalStore() {
-        this._approvals = new ArrayList<Approval>();
-        this._lock = new Object();
+    public void setHandleRevocationsAsExpiry(boolean handleRevocationsAsExpiry) {
+        this.handleRevocationsAsExpiry = handleRevocationsAsExpiry;
     }
 
     @Override
     public boolean addApproval(Approval approval) {
-        synchronized (this._lock) {
-            this._approvals.add(approval);
+        try {
+            String tenant = VmidentityUtils.getTenantName(client);
+            Approval added = convertToUaaApproval(client.addApproval(tenant, convertToIdmApproval(approval)));
+
+            if (added != null) {
+                Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+                publish(new ApprovalModifiedEvent(added, authentication));
+                return true;
+            } else {
+                return false;
+            }
+        } catch (Exception ex) {
+            logger.error("Adding an approval failed", ex);
+            throw new VmidentityDataAccessException("Unable to add approval");
         }
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        publish(new ApprovalModifiedEvent(approval, authentication));
-        return true;
     }
 
     @Override
     public boolean revokeApproval(Approval approval) {
-        synchronized (this._lock) {
-            this._approvals.remove(approval);
-        }
-        return false;
+        return revokeApprovals(String.format("user_id eq \"%s\" and client_id eq \"%s\" and scope eq \"%s\"", approval.getUserId(), approval.getClientId(), approval.getScope()));
     }
 
     @Override
     public boolean revokeApprovals(String filter) {
-        logger.debug(String.format("revokeApprovals: filter='%s'", filter));
-        String userId = getUserId(filter);
-        String clientId = getClientId(filter);
+        try {
+            String tenant = VmidentityUtils.getTenantName(client);
+            if (handleRevocationsAsExpiry) {
+                Collection<com.vmware.identity.idm.Approval> revoked = client.getApprovals(tenant, filter);
+                Calendar calendar = Calendar.getInstance();
+                calendar.add(Calendar.SECOND, -1);
+                Date now = new Date();
 
-        synchronized (this._lock) {
-            for (Approval a : this.internalGetApprovals(userId, clientId)) {
-                this._approvals.remove(a);
+                for (com.vmware.identity.idm.Approval approval : revoked) {
+                    approval.setExpiresAt(calendar.getTime()).setLastUpdatedAt(now);
+                    client.updateApproval(tenant, approval);
+                }
+            } else {
+                Collection<com.vmware.identity.idm.Approval> revoked = client.revokeApprovals(tenant, filter);
+                logger.debug(String.format("Revoked [%d] approvals matching filter [%s]", revoked.size(), filter));
             }
+        } catch (Exception ex) {
+            logger.error("Error revoking approvals with filter: " + filter, ex);
+            throw new VmidentityDataAccessException("Error revoking approvals with filter: " + filter);
         }
         return true;
     }
 
     @Override
     public List<Approval> getApprovals(String filter) {
-        logger.debug(String.format("getApprovals: filter='%s'", filter));
-        String userId = getUserId(filter);
-        String clientId = getClientId(filter);
-        return this.getApprovals(userId, clientId);
+        try {
+            String tenant = VmidentityUtils.getTenantName(client);
+            Collection<com.vmware.identity.idm.Approval> approvals = client.getApprovals(tenant, filter);
+            return convertToUaaApproval(approvals);
+        } catch (Exception ex) {
+            logger.error("Error getting approvals with filter: " + filter, ex);
+            throw new VmidentityDataAccessException("Unable to get approvals by filter: " + filter);
+        }
     }
 
     @Override
     public List<Approval> getApprovals(String userId, String clientId) {
-        synchronized (this._lock) {
-            return this.internalGetApprovals(userId, clientId);
-        }
+        return getApprovals(String.format("user_id eq \"%s\" and client_id eq \"%s\"", userId, clientId));
     }
 
     @Override
     public void setApplicationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
-        this._applicationEventPublisher = applicationEventPublisher;
+        this.applicationEventPublisher = applicationEventPublisher;
     }
 
     private void publish(ApplicationEvent event) {
-        if (this._applicationEventPublisher != null) {
-            this._applicationEventPublisher.publishEvent(event);
+        if (this.applicationEventPublisher != null) {
+            this.applicationEventPublisher.publishEvent(event);
         }
     }
 
-    public List<Approval> internalGetApprovals(String userId, String clientId) {
-        if (userId == null && clientId == null) {
-            throw new UnsupportedOperationException();
-        }
-        ArrayList<Approval> approvals = new ArrayList<Approval>();
-        for (Approval a : this._approvals) {
-            if ((userId == null) || userId.equals(a.getUserId())
-                    &&
-                    ((clientId == null) || (clientId.equals(a.getClientId())))) {
-                approvals.add(a);
-            }
-        }
-
-        return approvals;
+    private static com.vmware.identity.idm.Approval convertToIdmApproval(Approval approval) {
+        return new com.vmware.identity.idm.Approval()
+                .setUserId(approval.getUserId())
+                .setClientId(approval.getClientId())
+                .setScope(approval.getScope())
+                .setStatus(com.vmware.identity.idm.Approval.ApprovalStatus.valueOf(approval.getStatus().toString()))
+                .setExpiresAt(approval.getExpiresAt())
+                .setLastUpdatedAt(approval.getLastUpdatedAt());
     }
 
-    private static String getUserId(String filter) {
-        // todo: use proper impl
-        // "user_id eq \"%s\""
-        // "user_id eq \"%s\" and client_id eq \"%s\""
-        return getId(filter, "user_id");
-    }
-
-    private static String getClientId(String filter) {
-        // todo: use proper impl
-        // "user_id eq \"%s\" and client_id eq \"%s\""
-        return getId(filter, "client_id");
-    }
-
-    private static String getId(String filter, String attribute) {
-        String id = null;
-        // "attr eq \"%s\"
-        String expr = attribute + " eq ";
-        int index = filter.indexOf(expr);
-        if (index > -1) {
-            int index1 = filter.indexOf("\"", index + expr.length() - 1);
-            if (index1 > -1) {
-                int index2 = filter.indexOf("\"", index1 + 1);
-                if ((index2 > -1) && (index1 < index2)) {
-                    id = filter.substring(index1 + 1, index2);
-                }
-            }
+    private static List<Approval> convertToUaaApproval(Collection<com.vmware.identity.idm.Approval> approvals) {
+        List<Approval> uaaApprovals = new ArrayList<>(approvals.size());
+        for (com.vmware.identity.idm.Approval approval : approvals) {
+            uaaApprovals.add(convertToUaaApproval(approval));
         }
-        return id;
+        return uaaApprovals;
+    }
+
+    private static Approval convertToUaaApproval(com.vmware.identity.idm.Approval approval) {
+        return new Approval()
+                .setUserId(approval.getUserId())
+                .setClientId(approval.getClientId())
+                .setScope(approval.getScope())
+                .setStatus(Approval.ApprovalStatus.valueOf(approval.getStatus().toString()))
+                .setExpiresAt(approval.getExpiresAt())
+                .setLastUpdatedAt(approval.getLastUpdatedAt());
     }
 }
