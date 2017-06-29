@@ -53,20 +53,17 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
 
     @Override
     public List<ScimGroupMember> query(String filter) {
-        logger.debug(String.format("not yet implemented query: filter'%s'", filter));
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Vmidentity does not support proper filtering on group membership");
     }
 
     @Override
     public List<ScimGroupMember> query(String filter, String sortBy, boolean ascending) {
-        logger.debug(String.format("not yet implemented query: filter'%s'n sortby='%s', ascending='%s'", filter, sortBy,
-                ascending ? "true" : "false"));
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Vmidentity does not support proper filtering on group membership");
     }
 
     @Override
     public int delete(String filter) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Vmidentity does not support deleting group membership by filters");
     }
 
     @Override
@@ -76,7 +73,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             Group group = this.idmClient.findGroup(tenant, groupId);
-            if (systemDomain.equalsIgnoreCase(group.getId().getDomain()) == false) {
+            if (!systemDomain.equalsIgnoreCase(group.getId().getDomain())) {
                 logger.error("Cannot modify group membership for groups in non-system domain. " + groupId);
                 throw new InvalidScimResourceException(
                         "Cannot modify group membership for groups in non-system domain.");
@@ -241,10 +238,10 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             Group group = this.idmClient.findGroup(tenant, groupId);
-            if (systemDomain.equalsIgnoreCase(group.getId().getDomain()) == false) {
+
+            if (!systemDomain.equalsIgnoreCase(group.getId().getDomain())) {
                 logger.error("Cannot modify group membership for groups in non-system domain. " + groupId);
-                throw new InvalidScimResourceException(
-                        "Cannot modify group membership for groups in non-system domain.");
+                throw new InvalidScimResourceException("Cannot modify group membership for groups in non-system domain.");
             }
             // todo: we need a findPrincipal in idm client....
             PrincipalId id = VmidentityUtils.getPrincipalId(memberId);
@@ -263,6 +260,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             if (this.idmClient.removeFromLocalGroup(tenant, id, group.getName())) {
                 gm = createGroupMembership(memberId, type, true);
             }
+
             return gm;
         } catch (InvalidPrincipalException ex) {
             logger.debug(String.format("Scim resource not found '%s'.", ex.getPrincipal()));
@@ -281,7 +279,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             Group group = this.idmClient.findGroup(tenant, groupId);
-            if (systemDomain.equalsIgnoreCase(group.getId().getDomain()) == false) {
+            if (!systemDomain.equalsIgnoreCase(group.getId().getDomain())) {
                 logger.error("Cannot modify group membership for groups in non-system domain. " + groupId);
                 throw new InvalidScimResourceException(
                         "Cannot modify group membership for groups in non-system domain.");
@@ -315,6 +313,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
         HashSet<ScimGroup> modifiedGroups = new HashSet<ScimGroup>();
         String tenant = null;
         String systemDomain = null;
+
         try {
             tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
             systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient).toUpperCase(Locale.ENGLISH);

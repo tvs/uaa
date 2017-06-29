@@ -14,6 +14,7 @@ package org.cloudfoundry.identity.uaa.util;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 
 import org.apache.commons.lang.StringUtils;
 

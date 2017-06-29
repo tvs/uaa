@@ -271,13 +271,13 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
                 list.sort(Comparator.comparing(ScimUser::getFamilyName));
                 break;
             case "active":
-                list.sort((a, b) -> Boolean.compare(a.isActive(), b.isActive()));
+                list.sort(Comparator.comparing(ScimUser::isActive));
                 break;
             case "phonenumber":
                 list.sort((a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
                 break;
             case "verified":
-                list.sort((a, b) -> Boolean.compare(a.isVerified(), b.isVerified()));
+                list.sort(Comparator.comparing(ScimUser::isVerified));
                 break;
             case "origin":
                 list.sort(Comparator.comparing(ScimUser::getOrigin));
