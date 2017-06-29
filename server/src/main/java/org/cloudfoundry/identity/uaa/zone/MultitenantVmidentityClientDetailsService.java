@@ -19,6 +19,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -368,37 +369,37 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         validateOrderBy(sortBy);
         switch (sortBy.toLowerCase()) {
             case "client_id":
-                Collections.sort(list, (a, b) -> a.getClientId().compareTo(b.getClientId()));
+                list.sort(Comparator.comparing(ClientDetails::getClientId));
                 break;
             case "client_secret":
-                Collections.sort(list, (a, b) -> a.getClientSecret().compareTo(b.getClientSecret()));
+                list.sort(Comparator.comparing(ClientDetails::getClientSecret));
                 break;
             case "resource_ids":
-                Collections.sort(list, (a, b) -> compareToList(a.getResourceIds(), b.getResourceIds()));
+                list.sort((a, b) -> compareToList(a.getResourceIds(), b.getResourceIds()));
                 break;
             case "scope":
-                Collections.sort(list, (a, b) -> compareToList(a.getScope(), b.getScope()));
+                list.sort((a, b) -> compareToList(a.getScope(), b.getScope()));
                 break;
             case "authorized_grant_types":
-                Collections.sort(list, (a, b) -> compareToList(a.getAuthorizedGrantTypes(), b.getAuthorizedGrantTypes()));
+                list.sort((a, b) -> compareToList(a.getAuthorizedGrantTypes(), b.getAuthorizedGrantTypes()));
                 break;
             case "web_server_redirect_uri":
-                Collections.sort(list, (a, b) -> compareToList(a.getRegisteredRedirectUri(), b.getRegisteredRedirectUri()));
+                list.sort((a, b) -> compareToList(a.getRegisteredRedirectUri(), b.getRegisteredRedirectUri()));
                 break;
             case "authorities":
-                Collections.sort(list, (a, b) -> compareToList(a.getAuthorities(), b.getAuthorities()));
+                list.sort((a, b) -> compareToList(a.getAuthorities(), b.getAuthorities()));
                 break;
             case "access_token_validity":
-                Collections.sort(list, (a, b) -> a.getAccessTokenValiditySeconds().compareTo(b.getAccessTokenValiditySeconds()));
+                list.sort(Comparator.comparing(ClientDetails::getAccessTokenValiditySeconds));
                 break;
             case "refresh_token_validity":
-                Collections.sort(list, (a, b) -> a.getRefreshTokenValiditySeconds().compareTo(b.getRefreshTokenValiditySeconds()));
+                list.sort(Comparator.comparing(ClientDetails::getRefreshTokenValiditySeconds));
                 break;
             case "additional_information":
-                Collections.sort(list, (a, b) -> compareToMap(a.getAdditionalInformation(), b.getAdditionalInformation()));
+                list.sort((a, b) -> compareToMap(a.getAdditionalInformation(), b.getAdditionalInformation()));
                 break;
             case "autoapprove":
-                Collections.sort(list, (a, b) -> compareToList(((BaseClientDetails) a).getAutoApproveScopes(), ((BaseClientDetails) b).getAutoApproveScopes()));
+                list.sort((a, b) -> compareToList(((BaseClientDetails) a).getAutoApproveScopes(), ((BaseClientDetails) b).getAutoApproveScopes()));
                 break;
             case "lastmodified":
                 // Do nothing

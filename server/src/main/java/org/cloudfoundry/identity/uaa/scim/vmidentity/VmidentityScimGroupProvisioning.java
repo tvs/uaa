@@ -14,13 +14,16 @@ package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.audit.event.SystemDeletable;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
+import org.cloudfoundry.identity.uaa.scim.ScimCore;
 import org.cloudfoundry.identity.uaa.scim.ScimGroup;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupProvisioning;
 import org.cloudfoundry.identity.uaa.scim.ScimMeta;
@@ -218,25 +221,25 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
         validateOrderBy(sortBy);
         switch (sortBy.toLowerCase()) {
             case "id":
-                Collections.sort(list, (a, b) -> a.getId().compareTo(b.getId()));
+                list.sort(Comparator.comparing(ScimCore::getId));
                 break;
             case "displayname":
-                Collections.sort(list, (a, b) -> a.getDisplayName().compareTo(b.getDisplayName()));
+                list.sort(Comparator.comparing(ScimGroup::getDisplayName));
                 break;
             case "description":
-                Collections.sort(list, (a, b) -> a.getDescription().compareTo(b.getDescription()));
+                list.sort(Comparator.comparing(ScimGroup::getDescription));
                 break;
             case "created":
-                Collections.sort(list, (a, b) -> a.getMeta().getCreated().compareTo(b.getMeta().getCreated()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getCreated()));
                 break;
             case "lastmodified":
-                Collections.sort(list, (a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getCreated()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getLastModified()));
                 break;
             case "version":
-                Collections.sort(list, (a, b) -> Integer.compare(a.getVersion(), b.getVersion()));
+                list.sort(Comparator.comparingInt(ScimCore::getVersion));
                 break;
             case "identity_zone_id":
-                Collections.sort(list, (a, b) -> a.getZoneId().compareTo(b.getZoneId()));
+                list.sort(Comparator.comparing(ScimGroup::getZoneId));
                 break;
         }
 

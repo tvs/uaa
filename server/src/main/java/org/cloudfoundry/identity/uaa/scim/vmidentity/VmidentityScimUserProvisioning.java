@@ -14,6 +14,7 @@ package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +24,7 @@ import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.resources.ResourceMonitor;
+import org.cloudfoundry.identity.uaa.scim.ScimCore;
 import org.cloudfoundry.identity.uaa.scim.ScimMeta;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.scim.ScimUser.Name;
@@ -245,52 +247,52 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         validateOrderBy(sortBy);
         switch (sortBy.toLowerCase()) {
             case "id":
-                Collections.sort(list, (a, b) -> a.getId().compareTo(b.getId()));
+                list.sort(Comparator.comparing(ScimUser::getId));
                 break;
             case "version":
-                Collections.sort(list, (a, b) -> Integer.compare(a.getVersion(), b.getVersion()));
+                list.sort(Comparator.comparingInt(ScimUser::getVersion));
                 break;
             case "created":
-                Collections.sort(list, (a, b) -> a.getMeta().getCreated().compareTo(b.getMeta().getCreated()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getCreated()));
                 break;
             case "lastmodified":
-                Collections.sort(list, (a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getLastModified()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getLastModified()));
                 break;
             case "username":
-                Collections.sort(list, (a, b) -> a.getUserName().compareTo(b.getUserName()));
+                list.sort(Comparator.comparing(ScimUser::getUserName));
                 break;
             case "email":
-                Collections.sort(list, (a, b) -> compareToList(a.getEmails(), b.getEmails()));
+                list.sort((a, b) -> compareToList(a.getEmails(), b.getEmails()));
                 break;
             case "givenname":
-                Collections.sort(list, (a, b) -> a.getGivenName().compareTo(b.getGivenName()));
+                list.sort(Comparator.comparing(ScimUser::getGivenName));
                 break;
             case "familyname":
-                Collections.sort(list, (a, b) -> a.getFamilyName().compareTo(b.getFamilyName()));
+                list.sort(Comparator.comparing(ScimUser::getFamilyName));
                 break;
             case "active":
-                Collections.sort(list, (a, b) -> Boolean.compare(a.isActive(), b.isActive()));
+                list.sort(Comparator.comparing(ScimUser::isActive));
                 break;
             case "phonenumber":
-                Collections.sort(list, (a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
+                list.sort((a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
                 break;
             case "verified":
-                Collections.sort(list, (a, b) -> Boolean.compare(a.isVerified(), b.isVerified()));
+                list.sort(Comparator.comparing(ScimUser::isVerified));
                 break;
             case "origin":
-                Collections.sort(list, (a, b) -> a.getOrigin().compareTo(b.getOrigin()));
+                list.sort(Comparator.comparing(ScimUser::getOrigin));
                 break;
             case "external_id":
-                Collections.sort(list, (a, b) -> a.getExternalId().compareTo(b.getExternalId()));
+                list.sort(Comparator.comparing(ScimUser::getExternalId));
                 break;
             case "identity_zone_id":
-                Collections.sort(list, (a, b) -> a.getZoneId().compareTo(b.getZoneId()));
+                list.sort(Comparator.comparing(ScimUser::getZoneId));
                 break;
             case "salt":
-                Collections.sort(list, (a, b) -> a.getSalt().compareTo(b.getSalt()));
+                list.sort(Comparator.comparing(ScimUser::getSalt));
                 break;
             case "passwd_lastmodified":
-                Collections.sort(list, (a, b) -> a.getPasswordLastModified().compareTo(b.getPasswordLastModified()));
+                list.sort(Comparator.comparing(ScimUser::getPasswordLastModified));
                 break;
         }
 
