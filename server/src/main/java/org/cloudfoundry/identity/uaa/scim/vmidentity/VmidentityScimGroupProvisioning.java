@@ -16,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 import org.apache.commons.logging.Log;
@@ -232,7 +233,7 @@ public class VmidentityScimGroupProvisioning implements ScimGroupProvisioning, S
                 list.sort(Comparator.comparing(a -> a.getMeta().getCreated()));
                 break;
             case "lastmodified":
-                list.sort((a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getCreated()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getLastModified()));
                 break;
             case "version":
                 list.sort(Comparator.comparingInt(ScimCore::getVersion));
