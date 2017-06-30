@@ -20,7 +20,6 @@ import java.util.Set;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
-import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.scim.ScimGroup;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupMember;
 import org.cloudfoundry.identity.uaa.scim.ScimGroupMember.Role;
@@ -37,7 +36,6 @@ import com.vmware.identity.idm.InvalidPrincipalException;
 import com.vmware.identity.idm.PersonUser;
 import com.vmware.identity.idm.Principal;
 import com.vmware.identity.idm.PrincipalId;
-import com.vmware.identity.idm.SolutionUser;
 import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityScimGroupMembershipManager implements ScimGroupMembershipManager {
@@ -130,7 +128,6 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
                 String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
                 String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
                 Group group = this.idmClient.findGroup(tenant, groupId);
-                boolean groupInSystemDomain = systemDomain.equalsIgnoreCase(group.getId().getDomain());
 
                 // TODO: limits ...
                 Set<Group> groups = this.idmClient.findGroupsByNameInGroup(tenant, group.getId(), "", -1);
@@ -139,14 +136,14 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
                 if (groups != null) {
                     for (Group g : groups) {
                         members.add(createGroupMembership(g.getId().getUPN(), ScimGroupMember.Type.GROUP,
-                                groupInSystemDomain, g.getDomain()));
+                                VmidentityUtils.getOriginForDomain(tenant, g.getDomain(), systemDomain, this.idmClient)));
                     }
                 }
 
                 if (users != null) {
                     for (PersonUser user : users) {
                         members.add(createGroupMembership(user.getId().getUPN(), ScimGroupMember.Type.USER,
-                                groupInSystemDomain, user.getId().getDomain()));
+                                VmidentityUtils.getOriginForDomain(tenant, group.getDomain(), systemDomain, this.idmClient)));
                     }
                 }
             }
@@ -258,7 +255,7 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
             }
 
             if (this.idmClient.removeFromLocalGroup(tenant, id, group.getName())) {
-                gm = createGroupMembership(memberId, type, true, group.getDomain());
+                gm = createGroupMembership(memberId, type, VmidentityUtils.getOriginForDomain(tenant, group.getDomain(), systemDomain, this.idmClient));
             }
 
             return gm;
@@ -333,10 +330,9 @@ public class VmidentityScimGroupMembershipManager implements ScimGroupMembership
         return modifiedGroups;
     }
 
-    private static ScimGroupMember createGroupMembership(String memberId, ScimGroupMember.Type memberType,
-            boolean groupFromSystemDomain, String domain) {
+    private static ScimGroupMember createGroupMembership(String memberId, ScimGroupMember.Type memberType, String origin) {
         ScimGroupMember sgm = new ScimGroupMember(memberId, memberType, ScimGroupMember.GROUP_MEMBER);
-        sgm.setOrigin(groupFromSystemDomain ? OriginKeys.UAA : domain);
+        sgm.setOrigin(origin);
         return sgm;
     }
 }

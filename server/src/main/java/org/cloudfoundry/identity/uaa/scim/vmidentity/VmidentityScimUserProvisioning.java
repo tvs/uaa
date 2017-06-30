@@ -72,7 +72,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             if (personUser == null) {
                 throw new InvalidPrincipalException("User not found.", id);
             }
-            return getScimUser(personUser, tenant, systemDomain);
+            return getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
         } catch (InvalidPrincipalException ex) {
             throw new ScimResourceNotFoundException(id);
         } catch (Exception ex) {
@@ -100,7 +100,8 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             String[] parts = id.split("@");
             PrincipalId userId = new PrincipalId(parts[0], parts[1]);
 
-            ScimUser user = getScimUser(this.idmClient.findPersonUser(tenant, userId), tenant, systemDomain);
+            PersonUser personUser = this.idmClient.findPersonUser(tenant, userId);
+            ScimUser user = getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
             this.idmClient.deletePrincipal(tenant, parts[0]);
             return user;
         } catch (InvalidPrincipalException ex) {
@@ -121,7 +122,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             Set<PersonUser> users = idmClient.findPersonUsersByScimFilter(tenant, filter);
             ArrayList<ScimUser> scimUsers = new ArrayList<ScimUser>(users.size());
             for (PersonUser user : users) {
-                scimUsers.add(getScimUser(user, tenant, systemDomain));
+                scimUsers.add(getScimUser(user, tenant, VmidentityUtils.getOriginForDomain(tenant, user.getId().getDomain(), systemDomain, this.idmClient)));
             }
 
             return scimUsers;
@@ -166,29 +167,30 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             String name = user.getUserName();
             String[] parts = name.split("@");
+
             if (parts.length > 2) {
                 throw new InvalidScimResourceException(String.format("Invalid format for user name '%s'", name));
             } else if (parts.length == 2) {
-                if (systemDomain.equalsIgnoreCase(parts[1]) == false) {
+                if (!systemDomain.equalsIgnoreCase(parts[1])) {
                     throw new InvalidScimResourceException("Cannot create users in external domains.");
                 }
 
                 name = parts[0];
             }
             PersonDetail.Builder builder = new PersonDetail.Builder()
-                                                                     .firstName(user.getGivenName())
-                                                                     .lastName(user.getFamilyName());
+                    .firstName(user.getGivenName())
+                    .lastName(user.getFamilyName());
             PrincipalId userId = this.idmClient.addPersonUser(tenant, name, builder.build(), password.toCharArray());
             PersonUser personUser = this.idmClient.findPersonUser(tenant, userId);
 
             if (personUser == null) {
                 throw new InvalidPrincipalException("User not found.", userId.toString());
             }
-            return getScimUser(personUser, tenant, systemDomain);
+
+            return getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
         } catch (InvalidPrincipalException ex) {
             throw new ScimResourceNotFoundException(user.getUserName());
-        } catch (Exception ex) // todo: exception
-        {
+        } catch (Exception ex) {
             throw new IllegalStateException(String.format("User '%s' not found in tenant '%s'.", user.getUserName(), VmidentityUtils.getZoneId()), ex);
         }
     }
@@ -215,7 +217,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         return 3;
     }
 
-    private static ScimUser getScimUser(PersonUser personUser, String tenant, String systemDomain) {
+    private static ScimUser getScimUser(PersonUser personUser, String tenant, String origin) {
         String upn = VmidentityUtils.getPrincipalUpn(personUser.getId());
         ScimUser user = new ScimUser();
         user.setId(upn);
@@ -235,7 +237,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         user.setName(name);
         user.setActive((!personUser.isDisabled()) && (!personUser.isLocked()));
         user.setVerified(true);
-        user.setOrigin((systemDomain.equalsIgnoreCase(personUser.getId().getDomain())) ? OriginKeys.UAA : personUser.getId().getDomain());
+        user.setOrigin(origin);
         // user.setExternalId(externalId);
         user.setZoneId(tenant);
         // user.setSalt(salt);

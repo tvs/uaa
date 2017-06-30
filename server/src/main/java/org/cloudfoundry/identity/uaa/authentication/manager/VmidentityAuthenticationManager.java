@@ -23,7 +23,6 @@ import org.cloudfoundry.identity.uaa.authentication.UaaAuthentication;
 import org.cloudfoundry.identity.uaa.authentication.UaaAuthenticationDetails;
 import org.cloudfoundry.identity.uaa.authentication.UaaPrincipal;
 import org.cloudfoundry.identity.uaa.authentication.event.UserAuthenticationSuccessEvent;
-import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.user.UaaUser;
 import org.cloudfoundry.identity.uaa.user.UaaUserPrototype;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
@@ -49,13 +48,13 @@ import com.vmware.identity.idm.client.CasIdmClient;
 public class VmidentityAuthenticationManager implements AuthenticationManager, ApplicationEventPublisherAware {
 
     private final Log logger = LogFactory.getLog(VmidentityAuthenticationManager.class);
-    private final CasIdmClient _idmClient;
+    private final CasIdmClient idmClient;
     private ApplicationEventPublisher eventPublisher;
-    private final List<GrantedAuthority> _defaultAuthorities;
+    private final List<GrantedAuthority> defaultAuthorities;
 
     public VmidentityAuthenticationManager(CasIdmClient idmClient, Set<String> defaultAuthorities) {
-        this._idmClient = idmClient;
-        this._defaultAuthorities = Collections.unmodifiableList(
+        this.idmClient = idmClient;
+        this.defaultAuthorities = Collections.unmodifiableList(
                 AuthorityUtils.createAuthorityList(defaultAuthorities.toArray(new String[0])));
     }
 
@@ -73,16 +72,15 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
         String tenant;
         String systemDomain;
         try {
-            tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
+            tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
         } catch (Exception ex) {
             throw new IllegalStateException(ex.getMessage(), ex);
         }
 
-        PrincipalId userId = null;
+        PrincipalId userId;
         try {
-            userId = this._idmClient.authenticate(tenant, req.getName(),
-                    ((CharSequence) req.getCredentials()).toString());
+            userId = this.idmClient.authenticate(tenant, req.getName(), req.getCredentials().toString());
         } catch (com.vmware.identity.idm.PasswordExpiredException ex) {
             logger.warn("Account locked for user '" + req.getName() + "'.", ex);
             AuthenticationPolicyRejectionException e = new AuthenticationPolicyRejectionException(
@@ -108,12 +106,21 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
             throw e;
         }
 
-        String upn = VmidentityUtils.getPrincipalUpn(userId);
-
-        List<GrantedAuthority> authorities = null;
-
+        String origin;
         try {
-            authorities = VmidentityUtils.getUserAuthorities(this._idmClient, userId, tenant, systemDomain);
+            origin = VmidentityUtils.getOriginForDomain(tenant, userId.getDomain(), systemDomain, this.idmClient);
+        } catch (Exception ex) {
+            logger.error("Unable to fetch an origin for the user '" + userId + "'", ex);
+            AuthenticationServiceException e = new AuthenticationServiceException(ex.getMessage());
+            publish(new AuthenticationFailureServiceExceptionEvent(req, e));
+            throw e;
+        }
+
+        String upn = VmidentityUtils.getPrincipalUpn(userId);
+        List<GrantedAuthority> authorities = null;
+        try {
+            authorities = VmidentityUtils.getUserAuthorities(this.idmClient, userId, tenant, systemDomain);
+            authorities.addAll(defaultAuthorities);
 
             if (logger.isDebugEnabled()) {
                 logger.debug(String.format("Authorities for user '%s':", userId.getUPN()));
@@ -134,8 +141,8 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
                         upn,
                         upn,
                         upn,
-                        userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : userId.getDomain(),
-                        null, // external id
+                        origin,
+                        null,
                         tenant),
                 authorities,
                 (UaaAuthenticationDetails) req.getDetails());
@@ -147,9 +154,7 @@ public class VmidentityAuthenticationManager implements AuthenticationManager, A
                .withId(upn) // todo: this should probably become objectId
                .withZoneId(tenant)
                .withUsername(upn)
-               .withOrigin(
-                   userId.getDomain().equalsIgnoreCase(systemDomain) ? OriginKeys.UAA : userId.getDomain()
-               )
+               .withOrigin(origin)
                .withEmail(upn) // email is required; now idm it is optional //
                .withAuthorities(authorities);
         publish(new UserAuthenticationSuccessEvent(new UaaUser(proto), success));
