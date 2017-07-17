@@ -14,10 +14,11 @@ package org.cloudfoundry.identity.uaa.scim;
 
 import java.util.List;
 
+import org.cloudfoundry.identity.uaa.resources.Queryable;
 import org.cloudfoundry.identity.uaa.scim.exception.MemberAlreadyExistsException;
 import org.cloudfoundry.identity.uaa.scim.exception.ScimResourceNotFoundException;
 
-public interface ScimGroupExternalMembershipManager {
+public interface ScimGroupExternalMembershipManager extends Queryable<ScimGroupExternalMember> {
 
     ScimGroupExternalMember mapExternalGroup(String groupId, String externalGroup, String origin)
         throws ScimResourceNotFoundException, MemberAlreadyExistsException;

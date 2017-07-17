@@ -70,9 +70,7 @@ public class VmidentityUtils {
     }
 
     public static String getZoneId() {
-        String zoneId = IdentityZoneHolder.get().getId();
-
-        return zoneId;
+        return IdentityZoneHolder.get().getId();
     }
 
     public static String getPrincipalUpn(PrincipalId userId) {

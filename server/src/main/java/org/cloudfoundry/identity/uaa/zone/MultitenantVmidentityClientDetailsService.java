@@ -12,10 +12,14 @@
  *******************************************************************************/
 package org.cloudfoundry.identity.uaa.zone;
 
+import static org.cloudfoundry.identity.uaa.util.CompareUtils.compareToList;
+import static org.cloudfoundry.identity.uaa.util.CompareUtils.compareToMap;
+
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -28,6 +32,7 @@ import org.cloudfoundry.identity.uaa.client.MultitenantClientDetailsService;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.oauth.client.ClientConstants;
 import org.cloudfoundry.identity.uaa.util.JsonUtils;
+import org.cloudfoundry.identity.uaa.util.Validate;
 import org.cloudfoundry.identity.uaa.util.VmidentityUtils;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.AuthorityUtils;
@@ -49,6 +54,10 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
 
     private static final Log logger = LogFactory.getLog(MultitenantVmidentityClientDetailsService.class);
 
+    private static final String CLIENT_FIELDS = "client_id, client_secret, resource_ids, scope, "
+            + "authorized_grant_types, web_server_redirect_uri, authorities, access_token_validity, "
+            + "refresh_token_validity, additional_information, autoapprove, lastmodified";
+
     private final CasIdmClient idmClient;
     private final PasswordEncoder passwordEncoder;
 
@@ -56,6 +65,29 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         Assert.notNull(idmClient, "CasIdmClient required");
         this.idmClient = idmClient;
         this.passwordEncoder = passwordEncoder;
+    }
+
+    public List<ClientDetails> query(String filter, String sortBy, boolean ascending) {
+        logger.debug("Querying clients with filter: " + filter);
+
+        try {
+            String tenant = VmidentityUtils.getTenantName(idmClient);
+            Collection<OIDCClient> clients = idmClient.getOIDCClients(tenant, filter);
+
+            List<ClientDetails> details = new ArrayList<ClientDetails>(clients.size());
+            for (OIDCClient client : clients) {
+                details.add(mapOIDCClient(client, tenant, idmClient, passwordEncoder));
+            }
+
+            if (sortBy != null) {
+                sortClientDetails(details, sortBy, ascending);
+            }
+
+            return details;
+        } catch (Exception e) {
+            logger.error("Unable to query clients by filter '" + filter + "'", e);
+            throw new VmidentityDataAccessException("Unable to query users by filter: " + filter);
+        }
     }
 
     @Override
@@ -277,7 +309,7 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
         return builder.build();
     }
 
-    private static ClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
+    private static BaseClientDetails mapOIDCClient(OIDCClient client, String tenant, CasIdmClient idmClient, PasswordEncoder passwordEncoder) throws Exception {
         BaseClientDetails details = new BaseClientDetails();
         details.setClientId(client.getClientId());
         details.setClientSecret(client.getClientSecret());
@@ -331,6 +363,56 @@ public class MultitenantVmidentityClientDetailsService implements MultitenantCli
             list.addAll(collection);
         }
         return list;
+    }
+
+    private void sortClientDetails(List<ClientDetails> list, String sortBy, boolean ascending) {
+        validateOrderBy(sortBy);
+        switch (sortBy.toLowerCase()) {
+            case "client_id":
+                list.sort(Comparator.comparing(ClientDetails::getClientId));
+                break;
+            case "client_secret":
+                list.sort(Comparator.comparing(ClientDetails::getClientSecret));
+                break;
+            case "resource_ids":
+                list.sort((a, b) -> compareToList(a.getResourceIds(), b.getResourceIds()));
+                break;
+            case "scope":
+                list.sort((a, b) -> compareToList(a.getScope(), b.getScope()));
+                break;
+            case "authorized_grant_types":
+                list.sort((a, b) -> compareToList(a.getAuthorizedGrantTypes(), b.getAuthorizedGrantTypes()));
+                break;
+            case "web_server_redirect_uri":
+                list.sort((a, b) -> compareToList(a.getRegisteredRedirectUri(), b.getRegisteredRedirectUri()));
+                break;
+            case "authorities":
+                list.sort((a, b) -> compareToList(a.getAuthorities(), b.getAuthorities()));
+                break;
+            case "access_token_validity":
+                list.sort(Comparator.comparing(ClientDetails::getAccessTokenValiditySeconds));
+                break;
+            case "refresh_token_validity":
+                list.sort(Comparator.comparing(ClientDetails::getRefreshTokenValiditySeconds));
+                break;
+            case "additional_information":
+                list.sort((a, b) -> compareToMap(a.getAdditionalInformation(), b.getAdditionalInformation()));
+                break;
+            case "autoapprove":
+                list.sort((a, b) -> compareToList(((BaseClientDetails) a).getAutoApproveScopes(), ((BaseClientDetails) b).getAutoApproveScopes()));
+                break;
+            case "lastmodified":
+                // Do nothing
+                break;
+        }
+
+        if (!ascending) {
+            Collections.reverse(list);
+        }
+    }
+
+    private void validateOrderBy(String orderBy) throws IllegalArgumentException {
+        Validate.validateOrderBy(orderBy.toLowerCase(), CLIENT_FIELDS.toLowerCase());
     }
 
 }
