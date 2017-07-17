@@ -18,9 +18,12 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
 
+import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.user.UaaAuthority;
 import org.cloudfoundry.identity.uaa.zone.IdentityZone;
 import org.cloudfoundry.identity.uaa.zone.IdentityZoneHolder;
+import org.springframework.security.authentication.AuthenticationServiceException;
+import org.springframework.security.authentication.event.AuthenticationFailureServiceExceptionEvent;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 
@@ -35,15 +38,31 @@ public class VmidentityUtils {
 
     public static String getSystemDomain(String tenant, CasIdmClient idmClient) throws Exception {
         Collection<IIdentityStoreData> provider = idmClient.getProviders(tenant, EnumSet.of(DomainType.SYSTEM_DOMAIN));
-        // todo: should get security domain name, not provider name.
-        // Collection<SecurityDomain> domains = client.getSecurityDomains(tenant, provider.iterator().next().getName());
 
-        if ((provider == null) || (provider.iterator() == null) || (provider.iterator().hasNext() == false)) {
+        if (provider == null || provider.isEmpty()) {
             throw new IllegalStateException("System domain must exist.");
         }
 
         return provider.iterator().next().getName();
+    }
 
+    public static String getOriginForDomain(String tenant, String domain, String systemDomain, CasIdmClient idmClient) throws Exception {
+        if (domain.equalsIgnoreCase(systemDomain)) {
+            return OriginKeys.UAA;
+        } else {
+            return getProviderNameForDomain(tenant, domain, idmClient);
+        }
+    }
+
+    public static String getProviderNameForDomain(String tenant, String domain, CasIdmClient idmClient) throws Exception {
+        String origin = null;
+
+        IIdentityStoreData provider = idmClient.getProviderByDomain(tenant, domain);
+        if (provider != null) {
+            origin = provider.getName();
+        }
+
+        return origin;
     }
 
     public static String getTenantName(String systemTenant) {
