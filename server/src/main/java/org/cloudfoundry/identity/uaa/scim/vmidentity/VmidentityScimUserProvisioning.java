@@ -14,6 +14,7 @@ package org.cloudfoundry.identity.uaa.scim.vmidentity;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +24,7 @@ import org.apache.commons.logging.LogFactory;
 import org.cloudfoundry.identity.uaa.client.VmidentityDataAccessException;
 import org.cloudfoundry.identity.uaa.constants.OriginKeys;
 import org.cloudfoundry.identity.uaa.resources.ResourceMonitor;
+import org.cloudfoundry.identity.uaa.scim.ScimCore;
 import org.cloudfoundry.identity.uaa.scim.ScimMeta;
 import org.cloudfoundry.identity.uaa.scim.ScimUser;
 import org.cloudfoundry.identity.uaa.scim.ScimUser.Name;
@@ -70,7 +72,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             if (personUser == null) {
                 throw new InvalidPrincipalException("User not found.", id);
             }
-            return getScimUser(personUser, tenant, systemDomain);
+            return getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
         } catch (InvalidPrincipalException ex) {
             throw new ScimResourceNotFoundException(id);
         } catch (Exception ex) {
@@ -98,7 +100,8 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             String[] parts = id.split("@");
             PrincipalId userId = new PrincipalId(parts[0], parts[1]);
 
-            ScimUser user = getScimUser(this.idmClient.findPersonUser(tenant, userId), tenant, systemDomain);
+            PersonUser personUser = this.idmClient.findPersonUser(tenant, userId);
+            ScimUser user = getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
             this.idmClient.deletePrincipal(tenant, parts[0]);
             return user;
         } catch (InvalidPrincipalException ex) {
@@ -119,7 +122,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             Set<PersonUser> users = idmClient.findPersonUsersByScimFilter(tenant, filter);
             ArrayList<ScimUser> scimUsers = new ArrayList<ScimUser>(users.size());
             for (PersonUser user : users) {
-                scimUsers.add(getScimUser(user, tenant, systemDomain));
+                scimUsers.add(getScimUser(user, tenant, VmidentityUtils.getOriginForDomain(tenant, user.getId().getDomain(), systemDomain, this.idmClient)));
             }
 
             return scimUsers;
@@ -164,29 +167,30 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
             String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             String name = user.getUserName();
             String[] parts = name.split("@");
+
             if (parts.length > 2) {
                 throw new InvalidScimResourceException(String.format("Invalid format for user name '%s'", name));
             } else if (parts.length == 2) {
-                if (systemDomain.equalsIgnoreCase(parts[1]) == false) {
+                if (!systemDomain.equalsIgnoreCase(parts[1])) {
                     throw new InvalidScimResourceException("Cannot create users in external domains.");
                 }
 
                 name = parts[0];
             }
             PersonDetail.Builder builder = new PersonDetail.Builder()
-                                                                     .firstName(user.getGivenName())
-                                                                     .lastName(user.getFamilyName());
+                    .firstName(user.getGivenName())
+                    .lastName(user.getFamilyName());
             PrincipalId userId = this.idmClient.addPersonUser(tenant, name, builder.build(), password.toCharArray());
             PersonUser personUser = this.idmClient.findPersonUser(tenant, userId);
 
             if (personUser == null) {
                 throw new InvalidPrincipalException("User not found.", userId.toString());
             }
-            return getScimUser(personUser, tenant, systemDomain);
+
+            return getScimUser(personUser, tenant, VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient));
         } catch (InvalidPrincipalException ex) {
             throw new ScimResourceNotFoundException(user.getUserName());
-        } catch (Exception ex) // todo: exception
-        {
+        } catch (Exception ex) {
             throw new IllegalStateException(String.format("User '%s' not found in tenant '%s'.", user.getUserName(), VmidentityUtils.getZoneId()), ex);
         }
     }
@@ -213,7 +217,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         return 3;
     }
 
-    private static ScimUser getScimUser(PersonUser personUser, String tenant, String systemDomain) {
+    private static ScimUser getScimUser(PersonUser personUser, String tenant, String origin) {
         String upn = VmidentityUtils.getPrincipalUpn(personUser.getId());
         ScimUser user = new ScimUser();
         user.setId(upn);
@@ -233,7 +237,7 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         user.setName(name);
         user.setActive((!personUser.isDisabled()) && (!personUser.isLocked()));
         user.setVerified(true);
-        user.setOrigin((systemDomain.equalsIgnoreCase(personUser.getId().getDomain())) ? OriginKeys.UAA : OriginKeys.LDAP);
+        user.setOrigin(origin);
         // user.setExternalId(externalId);
         user.setZoneId(tenant);
         // user.setSalt(salt);
@@ -245,52 +249,52 @@ public class VmidentityScimUserProvisioning implements ScimUserProvisioning, Res
         validateOrderBy(sortBy);
         switch (sortBy.toLowerCase()) {
             case "id":
-                Collections.sort(list, (a, b) -> a.getId().compareTo(b.getId()));
+                list.sort(Comparator.comparing(ScimUser::getId));
                 break;
             case "version":
-                Collections.sort(list, (a, b) -> Integer.compare(a.getVersion(), b.getVersion()));
+                list.sort(Comparator.comparingInt(ScimUser::getVersion));
                 break;
             case "created":
-                Collections.sort(list, (a, b) -> a.getMeta().getCreated().compareTo(b.getMeta().getCreated()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getCreated()));
                 break;
             case "lastmodified":
-                Collections.sort(list, (a, b) -> a.getMeta().getLastModified().compareTo(b.getMeta().getLastModified()));
+                list.sort(Comparator.comparing(a -> a.getMeta().getLastModified()));
                 break;
             case "username":
-                Collections.sort(list, (a, b) -> a.getUserName().compareTo(b.getUserName()));
+                list.sort(Comparator.comparing(ScimUser::getUserName));
                 break;
             case "email":
-                Collections.sort(list, (a, b) -> compareToList(a.getEmails(), b.getEmails()));
+                list.sort((a, b) -> compareToList(a.getEmails(), b.getEmails()));
                 break;
             case "givenname":
-                Collections.sort(list, (a, b) -> a.getGivenName().compareTo(b.getGivenName()));
+                list.sort(Comparator.comparing(ScimUser::getGivenName));
                 break;
             case "familyname":
-                Collections.sort(list, (a, b) -> a.getFamilyName().compareTo(b.getFamilyName()));
+                list.sort(Comparator.comparing(ScimUser::getFamilyName));
                 break;
             case "active":
-                Collections.sort(list, (a, b) -> Boolean.compare(a.isActive(), b.isActive()));
+                list.sort(Comparator.comparing(ScimUser::isActive));
                 break;
             case "phonenumber":
-                Collections.sort(list, (a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
+                list.sort((a, b) -> compareToList(a.getPhoneNumbers(), b.getPhoneNumbers()));
                 break;
             case "verified":
-                Collections.sort(list, (a, b) -> Boolean.compare(a.isVerified(), b.isVerified()));
+                list.sort(Comparator.comparing(ScimUser::isVerified));
                 break;
             case "origin":
-                Collections.sort(list, (a, b) -> a.getOrigin().compareTo(b.getOrigin()));
+                list.sort(Comparator.comparing(ScimUser::getOrigin));
                 break;
             case "external_id":
-                Collections.sort(list, (a, b) -> a.getExternalId().compareTo(b.getExternalId()));
+                list.sort(Comparator.comparing(ScimUser::getExternalId));
                 break;
             case "identity_zone_id":
-                Collections.sort(list, (a, b) -> a.getZoneId().compareTo(b.getZoneId()));
+                list.sort(Comparator.comparing(ScimUser::getZoneId));
                 break;
             case "salt":
-                Collections.sort(list, (a, b) -> a.getSalt().compareTo(b.getSalt()));
+                list.sort(Comparator.comparing(ScimUser::getSalt));
                 break;
             case "passwd_lastmodified":
-                Collections.sort(list, (a, b) -> a.getPasswordLastModified().compareTo(b.getPasswordLastModified()));
+                list.sort(Comparator.comparing(ScimUser::getPasswordLastModified));
                 break;
         }
 

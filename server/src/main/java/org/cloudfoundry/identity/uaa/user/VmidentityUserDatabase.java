@@ -30,52 +30,78 @@ import com.vmware.identity.idm.client.CasIdmClient;
 
 public class VmidentityUserDatabase implements UaaUserDatabase {
 
-    private final CasIdmClient _idmClient;
-    // private final List<GrantedAuthority> _adminAuthorities;
-    // private final List<GrantedAuthority> _regularAuthorities;
-    private final List<GrantedAuthority> _defaultAuthorities;
+    private final CasIdmClient idmClient;
+    private final List<GrantedAuthority> defaultAuthorities;
 
     public VmidentityUserDatabase(CasIdmClient casIdmClient, Set<String> defaultAuthorities) {
-        this._idmClient = casIdmClient;
-        this._defaultAuthorities = Collections.unmodifiableList(
+        this.idmClient = casIdmClient;
+        this.defaultAuthorities = Collections.unmodifiableList(
                 AuthorityUtils.createAuthorityList(defaultAuthorities.toArray(new String[0])));
-        // String[] authArray = (String[])defaultAuthorities.toArray();
-        // this._adminAuthorities = AuthorityUtils.createAuthorityList(authArray);
-        // this._regularAuthorities = AuthorityUtils.createAuthorityList(authArray);
-        // mergeAuthorities(this._adminAuthorities, UaaAuthority.ADMIN_AUTHORITIES);
-        // mergeAuthorities(this._regularAuthorities, UaaAuthority.USER_AUTHORITIES);
     }
 
     @Override
     public UaaUser retrieveUserByName(String username, String origin) throws UsernameNotFoundException {
+        return this.retrieveUser(username, origin, true);
+    }
+
+    @Override
+    public UaaUser retrieveUserById(String id) throws UsernameNotFoundException {
+
         try {
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
+            String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
+
+            String[] parts = id.split("@");
+            String origin = VmidentityUtils.getOriginForDomain(tenant, parts[1], systemDomain, this.idmClient);
+
+            return this.retrieveUser(id, origin, false);
+        } catch (UsernameNotFoundException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new IllegalStateException(
+                    String.format("User '%s' not found in tenant '%s'.", id, VmidentityUtils.getZoneId()), ex);
+        }
+    }
+
+    /**
+     * Fetch the user by username and origin, while optionally checking that the domain in the username
+     * matches with the origin.
+     */
+    private UaaUser retrieveUser(String username, String origin, boolean checkOrigin) {
+        try {
+            String tenant = VmidentityUtils.getTenantName(this.idmClient.getSystemTenant());
+            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this.idmClient);
             UaaUser user = null;
             String[] parts = username.split("@");
             PrincipalId id = new PrincipalId(parts[0], parts[1]);
-            PersonUser personUser = this._idmClient.findPersonUser(tenant, id);
+            PersonUser personUser = this.idmClient.findPersonUser(tenant, id);
 
             String upn = VmidentityUtils.getPrincipalUpn(personUser.getId());
 
-            // todo: this is a potentially big perf hit
-            // we need to make sure authorities are retrieved only *after* auth, as part of auth
-            List<GrantedAuthority> authorities = VmidentityUtils.getUserAuthorities(this._idmClient, personUser.getId(), tenant, systemDomain);
+            if (checkOrigin) {
+                String actualOrigin = VmidentityUtils.getOriginForDomain(tenant, personUser.getId().getDomain(), systemDomain, this.idmClient);
+                if (!origin.equalsIgnoreCase(actualOrigin)) {
+                    throw new InvalidPrincipalException("The username's domain does not match with the origin", username);
+                }
+            }
+
+            List<GrantedAuthority> authorities = VmidentityUtils.getUserAuthorities(this.idmClient, personUser.getId(), tenant, systemDomain);
+            authorities.addAll(this.defaultAuthorities);
 
             UaaUserPrototype proto =
-                new UaaUserPrototype()
-                    .withId(upn) // todo: this should probably become objectId (when all sso stack is switched)
-                    .withZoneId(tenant)
-                    .withUsername(upn)
-                    .withOrigin(origin)
-                    .withEmail(upn) // email is required; now idm it is optional
-                    .withAuthorities(authorities);
+                    new UaaUserPrototype()
+                            .withId(upn) // todo: this should probably become objectId (when all sso stack is switched)
+                            .withZoneId(tenant)
+                            .withUsername(upn)
+                            .withOrigin(origin)
+                            .withEmail(upn) // email is required; now idm it is optional
+                            .withAuthorities(authorities);
 
             if (personUser.getDetail() != null) {
                 proto =
-                    proto.withFamilyName(personUser.getDetail().getLastName())
-                    .withGivenName(personUser.getDetail().getFirstName())
-                    .withPasswordLastModified(new Date(personUser.getDetail().getPwdLastSet()));
+                        proto.withFamilyName(personUser.getDetail().getLastName())
+                                .withGivenName(personUser.getDetail().getFirstName())
+                                .withPasswordLastModified(new Date(personUser.getDetail().getPwdLastSet()));
             }
 
             user = new UaaUser(proto);
@@ -85,25 +111,6 @@ public class VmidentityUserDatabase implements UaaUserDatabase {
         } catch (Exception ex) {
             throw new IllegalStateException(
                     String.format("User '%s' not found in tenant '%s'.", username, VmidentityUtils.getZoneId()), ex);
-        }
-    }
-
-    @Override
-    public UaaUser retrieveUserById(String id) throws UsernameNotFoundException {
-
-        try {
-            String tenant = VmidentityUtils.getTenantName(this._idmClient.getSystemTenant());
-            String systemDomain = VmidentityUtils.getSystemDomain(tenant, this._idmClient);
-
-            String[] parts = id.split("@");
-            String origin = (systemDomain.equalsIgnoreCase(parts[1])) ? OriginKeys.UAA : OriginKeys.LDAP;
-
-            return this.retrieveUserByName(id, origin);
-        } catch (UsernameNotFoundException ex) {
-            throw ex;
-        } catch (Exception ex) {
-            throw new IllegalStateException(
-                    String.format("User '%s' not found in tenant '%s'.", id, VmidentityUtils.getZoneId()), ex);
         }
     }
 
