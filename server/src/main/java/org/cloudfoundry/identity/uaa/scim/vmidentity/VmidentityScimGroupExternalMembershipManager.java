@@ -93,22 +93,4 @@ public class VmidentityScimGroupExternalMembershipManager implements ScimGroupEx
         return 0;
     }
 
-    @Override
-    public List<ScimGroupExternalMember> query(String filter) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public List<ScimGroupExternalMember> query(String filter, String sortBy, boolean ascending) {
-        // TODO Auto-generated method stub
-        return null;
-    }
-
-    @Override
-    public int delete(String filter) {
-        // TODO Auto-generated method stub
-        return 0;
-    }
-
 }
