@@ -80,8 +80,15 @@ public class VmidentityApprovalStore implements ApprovalStore, ApplicationEventP
                 Date now = new Date();
 
                 for (com.vmware.identity.idm.Approval approval : revoked) {
-                    approval.setExpiresAt(calendar.getTime()).setLastUpdatedAt(now);
-                    client.updateApproval(tenant, approval);
+                    com.vmware.identity.idm.Approval expired = new com.vmware.identity.idm.Approval(
+                            approval.getUserId(),
+                            approval.getClientId(),
+                            approval.getScope(),
+                            approval.getStatus(),
+                            calendar.getTime(),
+                            now
+                    );
+                    client.updateApproval(tenant, expired);
                 }
             } else {
                 Collection<com.vmware.identity.idm.Approval> revoked = client.revokeApprovals(tenant, filter);
@@ -123,13 +130,14 @@ public class VmidentityApprovalStore implements ApprovalStore, ApplicationEventP
     }
 
     private static com.vmware.identity.idm.Approval convertToIdmApproval(Approval approval) {
-        return new com.vmware.identity.idm.Approval()
-                .setUserId(approval.getUserId())
-                .setClientId(approval.getClientId())
-                .setScope(approval.getScope())
-                .setStatus(com.vmware.identity.idm.Approval.ApprovalStatus.valueOf(approval.getStatus().toString()))
-                .setExpiresAt(approval.getExpiresAt())
-                .setLastUpdatedAt(approval.getLastUpdatedAt());
+        return new com.vmware.identity.idm.Approval(
+                approval.getUserId(),
+                approval.getClientId(),
+                approval.getScope(),
+                com.vmware.identity.idm.Approval.ApprovalStatus.valueOf(approval.getStatus().toString()),
+                approval.getExpiresAt(),
+                approval.getLastUpdatedAt()
+        );
     }
 
     private static List<Approval> convertToUaaApproval(Collection<com.vmware.identity.idm.Approval> approvals) {
